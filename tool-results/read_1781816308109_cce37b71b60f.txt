@@ -1,0 +1,2002 @@
+     1→// ReplayAI developer documentation.
+     2→// Each page is authored as markdown and rendered by the DocsApp.
+     3→// Content matches the actual SDK surface area and REST API implemented in this app.
+     4→
+     5→export interface DocPage {
+     6→  slug: string;
+     7→  title: string;
+     8→  description: string;
+     9→  category: string;
+    10→  content: string;
+    11→}
+    12→
+    13→export interface DocNavCategory {
+    14→  category: string;
+    15→  pages: { slug: string; title: string; badge?: string }[];
+    16→}
+    17→
+    18→export const DOC_NAV: DocNavCategory[] = [
+    19→  {
+    20→    category: "Getting Started",
+    21→    pages: [
+    22→      { slug: "introduction", title: "Introduction" },
+    23→      { slug: "installation", title: "Installation" },
+    24→      { slug: "quickstart", title: "Quick Start" },
+    25→      { slug: "concepts", title: "Core Concepts" },
+    26→    ],
+    27→  },
+    28→  {
+    29→    category: "SDK Reference",
+    30→    pages: [
+    31→      { slug: "sdk-python", title: "Python SDK" },
+    32→      { slug: "sdk-typescript", title: "TypeScript SDK" },
+    33→      { slug: "sdk-config", title: "Configuration" },
+    34→    ],
+    35→  },
+    36→  {
+    37→    category: "Guides",
+    38→    pages: [
+    39→      { slug: "langchain", title: "LangChain", badge: "Popular" },
+    40→      { slug: "crewai", title: "CrewAI", badge: "Popular" },
+    41→      { slug: "llamaindex", title: "LlamaIndex" },
+    42→      { slug: "custom-agents", title: "Custom Agents" },
+    43→      { slug: "ci-cd", title: "CI/CD Integration" },
+    44→    ],
+    45→  },
+    46→  {
+    47→    category: "API Reference",
+    48→    pages: [
+    49→      { slug: "api-overview", title: "Overview & Auth" },
+    50→      { slug: "api-projects", title: "Projects" },
+    51→      { slug: "api-sessions", title: "Sessions" },
+    52→      { slug: "api-export", title: "Export" },
+    53→      { slug: "api-stats", title: "Stats" },
+    54→      { slug: "api-webhooks", title: "Webhooks" },
+    55→    ],
+    56→  },
+    57→];
+    58→
+    59→const introduction = `# Introduction
+    60→
+    61→ReplayAI is a DVR for AI agent workflows. It records every agent execution — every LLM call, tool call, retrieval, and decision — as a fully replayable session you can scrub, diff, and export as a deterministic regression test.
+    62→
+    63→## Why it exists
+    64→
+    65→AI agents are non-deterministic. The failure you saw in production at 3am almost never reproduces when you re-run the same prompt locally. Existing logging gives you text dumps, but you can't *re-run* the exact conditions that broke.
+    66→
+    67→ReplayAI fixes this by capturing the full execution trace and letting you replay it with every external call mocked from the recording — identical bytes, every time, at zero cost.
+    68→
+    69→## What you get
+    70→
+    71→- **Session recording** — a single decorator wraps your agent and captures inputs, outputs, timing, tokens, and costs.
+    72→- **Deterministic replay** — re-run any recorded session with tool and RAG responses served from the recording. Free and 100% reproducible.
+    73→- **Visual timeline** — scrub through every step like a video. See call ordering, durations, and failures at a glance.
+    74→- **Diff view** — compare two sessions side-by-side to find exactly where behavior diverged.
+    75→- **Export to test** — one click turns a failing session into a pytest or jest regression test with mocks auto-extracted.
+    76→
+    77→## How it works
+    78→
+    79→\`\`\`text
+    80→┌──────────────┐     record      ┌──────────────┐     store     ┌────────────┐
+    81→│  Your agent  │ ──────────────▶ │  replayai    │ ────────────▶ │  Session   │
+    82→│  (LangChain, │   trace()       │  tracer      │   JSON        │  store     │
+    83→│   CrewAI…)   │                 └──────────────┘               └────────────┘
+    84→└──────────────┘                                                        │
+    85→                                                                        │ replay
+    86→                                                                        ▼
+    87→                                                              ┌──────────────────┐
+    88→                                                              │  Dashboard / CLI  │
+    89→                                                              │  · timeline       │
+    90→                                                              │  · diff           │
+    91→                                                              │  · export → test  │
+    92→                                                              └──────────────────┘
+    93→\`\`\`
+    94→
+    95→The tracer is a thin instrumentation layer — no inference, no model calls of its own. It just observes and records. During replay, it serves recorded responses for every external call (tools, retrieval, and optionally LLMs) so the agent re-executes deterministically.
+    96→
+    97→## Where to go next
+    98→
+    99→- New here? Start with the [Quick Start](?view=developers&doc=quickstart) — you'll record and replay a session in under 5 minutes.
+   100→- Integrating an existing agent? Jump to the [LangChain](?view=developers&doc=langchain) or [CrewAI](?view=developers&doc=crewai) guide.
+   101→- Building a custom integration? Read the [Core Concepts](?view=developers&doc=concepts) then the [API reference](?view=developers&doc=api-overview).
+   102→`;
+   103→
+   104→const installation = `# Installation
+   105→
+   106→ReplayAI ships a Python SDK, a TypeScript SDK, and a dashboard. Install the SDK in your agent runtime and run the dashboard locally or in the cloud.
+   107→
+   108→## Python
+   109→
+   110→\`\`\`bash
+   111→pip install replayai
+   112→\`\`\`
+   113→
+   114→Verify:
+   115→
+   116→\`\`\`bash
+   117→python -c "import replayai; print(replayai.__version__)"
+   118→# 0.4.1
+   119→\`\`\`
+   120→
+   121→## TypeScript / Node.js
+   122→
+   123→\`\`\`bash
+   124→npm install @replayai/sdk
+   125→# or
+   126→bun add @replayai/sdk
+   127→\`\`\`
+   128→
+   129→Verify:
+   130→
+   131→\`\`\`bash
+   132→node -e "console.log(require('@replayai/sdk').VERSION)"
+   133→# 0.4.1
+   134→\`\`\`
+   135→
+   136→## Dashboard
+   137→
+   138→The dashboard is a standalone binary that reads your session store and gives you the timeline, diff, and export UI.
+   139→
+   140→\`\`\`bash
+   141→# Local mode — reads sessions from disk, no account needed
+   142→replayai ui --storage ./replays
+   143→
+   144→# Cloud mode — syncs to app.replayai.dev for team sharing
+   145→replayai ui --cloud --token $REPLAYAI_TOKEN
+   146→\`\`\`
+   147→
+   148→Open \`http://localhost:7373\` and you'll see the dashboard. On first run it's empty — record a session to populate it.
+   149→
+   150→## Requirements
+   151→
+   152→| Runtime | Minimum | Notes |
+   153→| --- | --- | --- |
+   154→| Python | 3.9+ | Tested on 3.9, 3.10, 3.11, 3.12 |
+   155→| Node.js | 18+ | ESM and CJS both supported |
+   156→| Dashboard | macOS, Linux, Windows | Single static binary, ~12 MB |
+   157→
+   158→The SDK has no hard dependency on any agent framework — LangChain, LlamaIndex, CrewAI, AutoGen, and raw OpenAI/Anthropic SDKs all work without special adapters. Framework-specific ergonomics live in optional extras.
+   159→
+   160→## Optional extras
+   161→
+   162→\`\`\`bash
+   163→# Python — framework convenience wrappers
+   164→pip install "replayai[langchain]"
+   165→pip install "replayai[llama_index]"
+   166→pip install "replayai[crewai]"
+   167→\`\`\`
+   168→
+   169→These extras are tiny (a few dozen lines each). They just pre-wire the tracer into the framework's callback hooks so you don't have to.
+   170→`;
+   171→
+   172→const quickstart = `# Quick Start
+   173→
+   174→Record your first agent run and replay it in under 5 minutes.
+   175→
+   176→## 1. Install
+   177→
+   178→\`\`\`bash
+   179→pip install replayai
+   180→\`\`\`
+   181→
+   182→## 2. Wrap your agent
+   183→
+   184→Add a single decorator (or context manager) around the code that runs your agent:
+   185→
+   186→\`\`\`python
+   187→from replayai import trace
+   188→
+   189→@trace("support-agent-v3")
+   190→def handle_support_ticket(message: str) -> str:
+   191→    intent = classify_intent(message)        # LLM call — recorded
+   192→    customer = lookup_customer(message)      # tool call — recorded
+   193→    charges = get_charges(customer.id)       # tool call — recorded
+   194→    policy = retrieve_refund_policy(intent)  # RAG retrieval — recorded
+   195→    response = draft_response(intent, customer, charges, policy)  # LLM — recorded
+   196→    return response
+   197→
+   198→handle_support_ticket("I was charged twice, refund me.")
+   199→\`\`\`
+   200→
+   201→When the function returns, the session is flushed to your local store:
+   202→
+   203→\`\`\`text
+   204→>>> session ses_8fa1 recorded (8 steps, 18.4s)
+   205→>>> open  http://localhost:7373/s/ses_8fa1
+   206→\`\`\`
+   207→
+   208→## 3. Open the dashboard
+   209→
+   210→\`\`\`bash
+   211→replayai ui
+   212→\`\`\`
+   213→
+   214→Click the session. You'll see a timeline of every step the agent took — color-coded by type (LLM, Tool, RAG, Decision, Error), with proportional widths showing relative duration.
+   215→
+   216→## 4. Replay it
+   217→
+   218→Hit **Play**. The session re-executes step by step. Every tool and RAG call is **mocked from the recording** — no network, no API keys, zero cost. The LLM responses are replayed verbatim by default.
+   219→
+   220→Toggle **Live LLM** if you want to re-invoke the actual model (useful for testing prompt changes — output may differ and costs apply).
+   221→
+   222→## 5. Export it as a test
+   223→
+   224→Switch to the **Export to Test** tab, pick \`pytest\`, and you get a runnable regression test:
+   225→
+   226→\`\`\`python
+   227→# Auto-generated by ReplayAI · session ses_8fa1
+   228→import pytest
+   229→from replayai import ReplaySession
+   230→
+   231→REPLAY_ID = "ses_8fa1"
+   232→
+   233→def test_support_agent_refund_query(replay: ReplaySession):
+   234→    # Mocked deterministic responses (recorded from production)
+   235→    replay.mock("lookup_customer", '{"customer_id":"cus_8821",...}')
+   236→    replay.mock("get_charges", '{"charges":[...]}')
+   237→    replay.mock("retrieve", 'Top-3 chunks (cosine 0.71): …')
+   238→
+   239→    with replay.trace() as trace:
+   240→        result = replay.run(agent="support-agent-v3", framework="LangChain")
+   241→
+   242→    assert trace.step_count == 8
+   243→    assert trace.status == "failed"
+   244→\`\`\`
+   245→
+   246→Commit it. CI now asserts the agent never regresses on that exact scenario — **deterministic, free, no API keys needed**.
+   247→
+   248→## That's it
+   249→
+   250→You now have:
+   251→- A recorded session you can replay any time.
+   252→- A failing-run test that will catch regressions forever.
+   253→- A diff tool to compare this run against future ones.
+   254→
+   255→Next, read the [Core Concepts](?view=developers&doc=concepts) to understand what's actually being recorded, or jump to the [LangChain guide](?view=developers&doc=langchain) for framework-specific patterns.
+   256→`;
+   257→
+   258→const concepts = `# Core Concepts
+   259→
+   260→ReplayAI has four primitives: **projects**, **sessions**, **steps**, and **replay**. Understanding these four is all you need.
+   261→
+   262→## Projects
+   263→
+   264→A project is a logical grouping of sessions — typically one per agent deployment. Projects let you scope the dashboard, filter sessions, and manage access in the cloud product.
+   265→
+   266→\`\`\`python
+   267→# Pin a run to a specific project
+   268→@trace("support-agent-v3", project="support-agent")
+   269→def handle_support_ticket(message): ...
+   270→\`\`\`
+   271→
+   272→If you omit \`project\`, the SDK uses the \`REPLAYAI_PROJECT\` env var, then falls back to the first project in your store.
+   273→
+   274→## Sessions
+   275→
+   276→A session is a single recorded execution of an agent — one user message in, one final response out (or a failure). A session contains:
+   277→
+   278→| Field | Description |
+   279→| --- | --- |
+   280→| \`id\` | Stable identifier (\`ses_xxxx\`), used in share links and tests |
+   281→| \`status\` | \`success\`, \`failed\`, or \`running\` |
+   282→| \`startedAt\` | When the run began |
+   283→| \`durationMs\` | Wall-clock duration |
+   284→| \`tokenTotal\` | Sum of input + output tokens across all LLM calls |
+   285→| \`costUsd\` | Estimated cost, derived from per-model rates |
+   286→| \`tags\` | Free-form labels for filtering (\`production\`, \`canary\`, …) |
+   287→| \`steps\` | Ordered list of steps (see below) |
+   288→
+   289→A session is **immutable once it's flushed**. To "edit" one, you delete and re-record — which is exactly what you want for a debugging artifact. Immutability is what makes replays trustworthy.
+   290→
+   291→## Steps
+   292→
+   293→A step is a single observable action the agent took. There are five types:
+   294→
+   295→| Type | Color | What it represents | Replay behavior |
+   296→| --- | --- | --- | --- |
+   297→| \`llm_call\` | emerald | A call to a language model | Replayed verbatim by default; opt-in to re-invoke live |
+   298→| \`tool_call\` | sky | A function/tool the agent invoked (e.g. \`issue_refund\`) | Always mocked from recording |
+   299→| \`retrieval\` | violet | A RAG retrieval (vector search, keyword, hybrid) | Always mocked from recording |
+   300→| \`decision\` | amber | A routing/branching decision the agent made | Replayed verbatim |
+   301→| \`error\` | rose | A failure (tool error, exception, guardrail trip) | Reproduced deterministically |
+   302→
+   303→Each step records its name, offset from session start, duration, status, model (for LLM calls), token counts, input, and output. That's it — no internal state, no black box.
+   304→
+   305→The key insight: **only \`llm_call\` steps are non-deterministic in the original run**. Everything else (tools, retrieval, decisions) is deterministic given the same inputs. So during replay, we mock the deterministic external calls and serve the recorded LLM responses — giving you a fully reproducible execution.
+   306→
+   307→## Replay
+   308→
+   309→Replay re-runs a recorded session under the exact conditions that produced it. There are two modes:
+   310→
+   311→### Mocked LLM (default, free, deterministic)
+   312→
+   313→Every step — tools, retrieval, *and* LLM responses — is served from the recording. The agent re-executes but every external call short-circuits to the recorded bytes. Output is byte-identical to the original. Costs nothing. Use this for:
+   314→
+   315→- Debugging a specific failure
+   316→- Regression tests in CI
+   317→- Sharing a reproduction with a teammate
+   318→
+   319→### Live LLM (opt-in, paid, non-deterministic)
+   320→
+   321→Tools and retrieval are still mocked, but LLM calls are re-invoked against the real model with the recorded input. Useful for:
+   322→
+   323→- Testing whether a prompt change produces different output
+   324→- Catching model drift before deploy
+   325→- A/B comparing two model versions on identical inputs
+   326→
+   327→You toggle this per-run in the dashboard, or with the \`--live-llm\` flag in the CLI.
+   328→
+   329→## What gets recorded (and what doesn't)
+   330→
+   331→**Recorded:** every LLM call's full prompt + completion, every tool call's args + result, every retrieval's query + returned chunks, all timing, all token counts, all errors.
+   332→
+   333→**Not recorded:** secrets in environment variables (the SDK redacts known secret patterns), file contents not passed through the agent, network traffic not mediated by the agent.
+   334→
+   335→> **Note:** The SDK redacts values matching common secret patterns (\`sk-\`, \`Bearer \`, \`password=\`, etc.) before writing to the store. You can add custom redaction patterns via [\`REPLAYAI_REDACT_PATTERNS\`](?view=developers&doc=sdk-config).
+   336→`;
+   337→
+   338→const sdkPython = `# Python SDK
+   339→
+   340→The Python SDK is the primary way to instrument agents. It's framework-agnostic at its core — the framework extras just pre-wire callbacks.
+   341→
+   342→## \`trace()\` — the only function you need
+   343→
+   344→\`trace()\` is both a decorator and a context manager. It starts a session, records every step inside it, and flushes on exit.
+   345→
+   346→\`\`\`python
+   347→from replayai import trace
+   348→
+   349→# As a decorator
+   350→@trace("support-agent-v3", project="support-agent", tags=["production"])
+   351→def handle_support_ticket(message: str) -> str:
+   352→    ...
+   353→
+   354→# As a context manager
+   355→with trace("research-agent-v2", tags=["batch"]):
+   356→    result = crew.kickoff(inputs={"topic": "AI observability pricing"})
+   357→\`\`\`
+   358→
+   359→### Signature
+   360→
+   361→\`\`\`python
+   362→def trace(
+   363→    name: str,
+   364→    *,
+   365→    project: str | None = None,       # project slug or id; defaults to env
+   366→    tags: list[str] | None = None,     # free-form labels
+   367→    framework: str = "Custom",         # metadata only
+   368→    started_at: datetime | None = None,# defaults to now()
+   369→) -> TraceContext
+   370→\`\`\`
+   371→
+   372→The returned \`TraceContext\` is also a context manager — exiting it flushes the session to the store and broadcasts a \`session:created\` event to any connected dashboards.
+   373→
+   374→## Manual step recording
+   375→
+   376→Normally you don't record steps manually — the framework integrations do it for you. But for custom agents or when you want explicit control:
+   377→
+   378→\`\`\`python
+   379→from replayai import trace, record_step
+   380→
+   381→with trace("custom-agent") as ctx:
+   382→    # Record an LLM call manually
+   383→    record_step(
+   384→        type="llm_call",
+   385→        name="classify_intent",
+   386→        model="gpt-4o-mini",
+   387→        tokens_in=312,
+   388→        tokens_out=24,
+   389→        input="User: refund please",
+   390→        output="intent: billing_dispute",
+   391→        status="success",
+   392→    )
+   393→
+   394→    # Record a tool call
+   395→    record_step(
+   396→        type="tool_call",
+   397→        name="issue_refund",
+   398→        input='{"charge_id": "ch_002"}',
+   399→        output='{"refund_id": "ref_3391"}',
+   400→        status="success",
+   401→    )
+   402→
+   403→    # Record an error
+   404→    record_step(
+   405→        type="error",
+   406→        name="refund_blocked",
+   407→        input="charge_id=ch_002",
+   408→        output="ERROR 403: requires approval_id",
+   409→        status="failed",
+   410→    )
+   411→\`\`\`
+   412→
+   413→Steps are timestamped automatically relative to session start. The \`t\` (offset) and \`durationMs\` fields are inferred unless you pass them explicitly.
+   414→
+   415→## \`ReplaySession\` — for tests and CLI replay
+   416→
+   417→\`ReplaySession\` loads a recorded session and re-runs it under mocked (or live) conditions. This is what the exported tests use.
+   418→
+   419→\`\`\`python
+   420→from replayai import ReplaySession
+   421→
+   422→replay = ReplaySession("ses_8fa1")
+   423→
+   424→# Register mocks explicitly (optional — the recording is used by default)
+   425→replay.mock("issue_refund", '{"refund_id":"ref_3391","status":"succeeded"}')
+   426→
+   427→# Run the agent under recorded conditions
+   428→with replay.trace() as trace:
+   429→    result = replay.run(agent="support-agent-v3", framework="LangChain")
+   430→
+   431→assert trace.step_count == 8
+   432→assert trace.status == "failed"
+   433→\`\`\`
+   434→
+   435→### \`ReplaySession\` API
+   436→
+   437→\`\`\`python
+   438→class ReplaySession:
+   439→    def __init__(self, session_id: str, *, live_llm: bool = False): ...
+   440→
+   441→    def mock(self, fn_name: str, response: str | dict) -> None:
+   442→        """Override the recorded response for a tool/retrieval call."""
+   443→
+   444→    def run(self, *, agent: str, framework: str = "Custom") -> Any:
+   445→        """Re-execute the agent. Tools/RAG are mocked; LLM is replayed unless live_llm=True."""
+   446→
+   447→    def trace(self) -> TraceContext:
+   448→        """Context manager yielding a Trace with .step_count, .status, .steps[]."""
+   449→
+   450→    def export(self, lang: str = "pytest") -> str:
+   451→        """Generate a test file as a string. lang='pytest' | 'jest'."""
+   452→\`\`\`
+   453→
+   454→## Async support
+   455→
+   456→The SDK is fully async-compatible. Use \`atrace\` and \`arecord_step\`:
+   457→
+   458→\`\`\`python
+   459→import asyncio
+   460→from replayai import atrace, arecord_step
+   461→
+   462→@atrace("async-agent")
+   463→async def handle(message: str) -> str:
+   464→    intent = await classify(message)
+   465→    await arecord_step(type="llm_call", name="classify", ...)
+   466→    return intent
+   467→
+   468→asyncio.run(handle("hello"))
+   469→\`\`\`
+   470→
+   471→## Error handling
+   472→
+   473→The tracer never raises into your agent code. If recording fails (disk full, network error to cloud store), it logs a warning and continues — your agent's correctness never depends on ReplayAI.
+   474→
+   475→You can opt into strict mode if you want recording failures to surface:
+   476→
+   477→\`\`\`python
+   478→import replayai
+   479→replayai.strict_mode = True  # raises RecordingError on failure
+   480→\`\`\`
+   481→`;
+   482→
+   483→const sdkTypescript = `# TypeScript SDK
+   484→
+   485→The TypeScript SDK mirrors the Python SDK's surface area. It ships as ESM and CJS, works in Node 18+ and Bun, and has first-class async support.
+   486→
+   487→## \`trace()\` — decorator-style and context manager
+   488→
+   489→JavaScript has no decorators-as-syntax in stable runtime yet, so the SDK uses a higher-order function and a context manager:
+   490→
+   491→\`\`\`typescript
+   492→import { trace, withTrace } from "@replayai/sdk";
+   493→
+   494→// Higher-order function (wraps an existing function)
+   495→export const handleSupportTicket = trace(
+   496→  "support-agent-v3",
+   497→  { project: "support-agent", tags: ["production"] },
+   498→  async (message: string): Promise<string> => {
+   499→    const intent = await classifyIntent(message);
+   500→    const customer = await lookupCustomer(message);
+   501→    // ...
+   502→    return response;
+   503→  },
+   504→);
+   505→
+   506→// Context manager (for non-function scopes)
+   507→await withTrace("research-agent-v2", { tags: ["batch"] }, async () => {
+   508→  const result = await crew.kickoff({ topic: "AI observability pricing" });
+   509→  return result;
+   510→});
+   511→\`\`\`
+   512→
+   513→### Signature
+   514→
+   515→\`\`\`typescript
+   516→function trace<T extends (...args: any[]) => any>(
+   517→  name: string,
+   518→  opts?: {
+   519→    project?: string;
+   520→    tags?: string[];
+   521→    framework?: string;
+   522→    startedAt?: Date;
+   523→  },
+   524→  fn: T,
+   525→): T;
+   526→
+   527→function withTrace<T>(
+   528→  name: string,
+   529→  opts: TraceOptions,
+   530→  fn: () => T | Promise<T>,
+   531→): Promise<T>;
+   532→\`\`\`
+   533→
+   534→## Manual step recording
+   535→
+   536→\`\`\`typescript
+   537→import { trace, recordStep } from "@replayai/sdk";
+   538→
+   539→await withTrace("custom-agent", {}, async () => {
+   540→  await recordStep({
+   541→    type: "llm_call",
+   542→    name: "classify_intent",
+   543→    model: "gpt-4o-mini",
+   544→    tokensIn: 312,
+   545→    tokensOut: 24,
+   546→    input: "User: refund please",
+   547→    output: "intent: billing_dispute",
+   548→    status: "success",
+   549→  });
+   550→
+   551→  await recordStep({
+   552→    type: "tool_call",
+   553→    name: "issue_refund",
+   554→    input: JSON.stringify({ charge_id: "ch_002" }),
+   555→    output: JSON.stringify({ refund_id: "ref_3391" }),
+   556→    status: "success",
+   557→  });
+   558→});
+   559→\`\`\`
+   560→
+   561→## \`ReplaySession\`
+   562→
+   563→\`\`\`typescript
+   564→import { ReplaySession } from "@replayai/sdk";
+   565→
+   566→const replay = new ReplaySession("ses_8fa1", { liveLlm: false });
+   567→
+   568→replay.mock("issue_refund", JSON.stringify({ refund_id: "ref_3391" }));
+   569→
+   570→const trace = await replay.run({
+   571→  agent: "support-agent-v3",
+   572→  framework: "LangChain",
+   573→});
+   574→
+   575→expect(trace.stepCount).toBe(8);
+   576→expect(trace.status).toBe("failed");
+   577→\`\`\`
+   578→
+   579→### \`ReplaySession\` API
+   580→
+   581→\`\`\`typescript
+   582→class ReplaySession {
+   583→  constructor(sessionId: string, opts?: { liveLlm?: boolean });
+   584→
+   585→  mock(fnName: string, response: string | object): void;
+   586→  run(opts: { agent: string; framework?: string }): Promise<Trace>;
+   587→  export(lang?: "pytest" | "jest"): string;
+   588→}
+   589→
+   590→interface Trace {
+   591→  stepCount: number;
+   592→  status: "success" | "failed" | "running";
+   593→  steps: Step[];
+   594→}
+   595→\`\`\`
+   596→
+   597→## ESM and CJS
+   598→
+   599→Both are supported. The package \`exports\` field routes automatically:
+   600→
+   601→\`\`\`javascript
+   602→// ESM
+   603→import { trace } from "@replayai/sdk";
+   604→
+   605→// CJS
+   606→const { trace } = require("@replayai/sdk");
+   607→\`\`\`
+   608→
+   609→## Edge runtime caveats
+   610→
+   611→The SDK uses the Node \`fs\` module for local storage and \`fetch\` for cloud sync. On edge runtimes (Cloudflare Workers, Vercel Edge), local storage is unavailable — use cloud mode only:
+   612→
+   613→\`\`\`typescript
+   614→import { configure } from "@replayai/sdk";
+   615→
+   616→configure({ storage: "cloud", token: process.env.REPLAYAI_TOKEN! });
+   617→\`\`\`
+   618→`;
+   619→
+   620→const sdkConfig = `# Configuration
+   621→
+   622→The SDK is configured via environment variables, a config file, or programmatic settings — in that order of precedence.
+   623→
+   624→## Environment variables
+   625→
+   626→| Variable | Default | Description |
+   627→| --- | --- | --- |
+   628→| \`REPLAYAI_PROJECT\` | — | Default project slug/id when \`trace()\` omits it |
+   629→| \`REPLAYAI_TOKEN\` | — | Cloud API token (required for cloud sync) |
+   630→| \`REPLAYAI_STORAGE\` | \`local\` | \`local\`, \`cloud\`, or \`both\` |
+   631→| \`REPLAYAI_STORAGE_PATH\` | \`./replays\` | Local storage directory |
+   632→| \`REPLAYAI_API_URL\` | \`https://api.replayai.dev\` | Cloud API base URL |
+   633→| \`REPLAYAI_DASHBOARD_URL\` | \`http://localhost:7373\` | Where \`replayai ui\` opens |
+   634→| \`REPLAYAI_REDACT_PATTERNS\` | built-in set | Comma-separated regex patterns to redact from recordings |
+   635→| \`REPLAYAI_SAMPLE_RATE\` | \`1.0\` | Fraction of sessions to record (0.0–1.0) |
+   636→| \`REPLAYAI_LIVE_LLM\` | \`false\` | Default for replay \`live_llm\` mode |
+   637→| \`REPLAYAI_STRICT\` | \`false\` | Raise on recording failures instead of warning |
+   638→
+   639→## Config file
+   640→
+   641→\`\`\`bash
+   642→# replayai.config.toml — placed in your project root
+   643→project = "support-agent"
+   644→storage = "both"
+   645→storage_path = "./replays"
+   646→sample_rate = 1.0
+   647→
+   648→[redact]
+   649→patterns = [
+   650→  "sk-[a-zA-Z0-9]{20,}",     # OpenAI keys
+   651→  "Bearer [a-zA-Z0-9._-]+",  # auth tokens
+   652→  "password=[^&\\s]+",
+   653→  "[A-Z0-9]{28,}",           # generic long secrets
+   654→]
+   655→
+   656→[cost_rates]  # per 1M tokens, USD — overrides built-in rates
+   657→"gpt-4o" = { in = 2.5, out = 10 }
+   658→"gpt-4o-mini" = { in = 0.15, out = 0.6 }
+   659→"claude-3.5-sonnet" = { in = 3.0, out = 15.0 }
+   660→\`\`\`
+   661→
+   662→## Programmatic configuration
+   663→
+   664→\`\`\`python
+   665→import replayai
+   666→
+   667→replayai.configure(
+   668→    project="support-agent",
+   669→    storage="both",
+   670→    storage_path="./replays",
+   671→    token="rai_live_...",
+   672→    sample_rate=1.0,
+   673→    redact_patterns=[r"sk-[a-zA-Z0-9]{20,}"],
+   674→)
+   675→\`\`\`
+   676→
+   677→\`\`\`typescript
+   678→import { configure } from "@replayai/sdk";
+   679→
+   680→configure({
+   681→  project: "support-agent",
+   682→  storage: "both",
+   683→  storagePath: "./replays",
+   684→  token: process.env.REPLAYAI_TOKEN!,
+   685→  sampleRate: 1.0,
+   686→  redactPatterns: [/sk-[a-zA-Z0-9]{20,}/],
+   687→});
+   688→\`\`\`
+   689→
+   690→## Sampling
+   691→
+   692→In production you may not want to record every run (cost, storage, latency). Set \`REPLAYAI_SAMPLE_RATE\` to a fraction:
+   693→
+   694→\`\`\`bash
+   695→# Record 10% of runs in production
+   696→REPLAYAI_SAMPLE_RATE=0.1
+   697→
+   698→# Always record failures, even at low sample rates
+   699→# (set in config file)
+   700→[recording]
+   701→sample_rate = 0.1
+   702→always_record_failures = true
+   703→\`\`\`
+   704→
+   705→When \`always_record_failures\` is on (default), any session that ends in \`failed\` status is recorded regardless of the sample rate — so you never miss the runs you most want to debug.
+   706→
+   707→## Cost estimation
+   708→
+   709→The SDK estimates cost from token counts and per-model rates. Built-in rates cover OpenAI and Anthropic models; for others, add entries to \`[cost_rates]\` in your config:
+   710→
+   711→\`\`\`toml
+   712→[cost_rates]
+   713→"my-finetune" = { in = 1.0, out = 4.0 }
+   714→\`\`\`
+   715→
+   716→If the model is unknown, cost is estimated as zero and a warning is logged. You can always override cost on a per-session basis via the [API](?view=developers&doc=api-sessions).
+   717→
+   718→## Redaction
+   719→
+   720→Secrets are redacted from recordings before they're written. The default patterns catch common API key formats. Add your own for internal secret shapes:
+   721→
+   722→\`\`\`bash
+   723→REPLAYAI_REDACT_PATTERNS="mycompany_key_[a-z0-9]{32},internal_token_[a-f0-9]+"
+   724→\`\`\`
+   725→
+   726→Redacted values are replaced with \`[REDACTED]\` in both input and output fields. The original is never written to disk or sent to the cloud.
+   727→`;
+   728→
+   729→const langchain = `# LangChain Guide
+   730→
+   731→LangChain is the most popular framework for building LLM agents in Python. ReplayAI's LangChain extra auto-instruments every LLM call, tool call, and retrieval — no code changes to your agent logic.
+   732→
+   733→## Install
+   734→
+   735→\`\`\`bash
+   736→pip install "replayai[langchain]"
+   737→\`\`\`
+   738→
+   739→This installs \`langchain-core\` as a dependency and registers a callback handler that the tracer uses.
+   740→
+   741→## Wrap a chain
+   742→
+   743→For simple chains (no agent loop), wrap the invocation:
+   744→
+   745→\`\`\`python
+   746→from replayai.integrations.langchain import trace_chain
+   747→
+   748→@trace_chain("docs-qa", project="docs-qa", tags=["rag"])
+   749→def answer(question: str) -> str:
+   750→    return rag_chain.invoke(question)
+   751→
+   752→answer("How many PTO days carry over?")
+   753→\`\`\`
+   754→
+   755→Every component inside \`rag_chain\` — the retriever, the prompt formatting, the LLM call — is recorded as a step.
+   756→
+   757→## Wrap an agent
+   758→
+   759→Agents (with tool-calling loops) work the same way:
+   760→
+   761→\`\`\`python
+   762→from replayai.integrations.langchain import trace_agent
+   763→from langchain.agents import create_openai_tools_agent, AgentExecutor
+   764→
+   765→agent = create_openai_tools_agent(llm, tools, prompt)
+   766→executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+   767→
+   768→@trace_agent("support-agent-v3", project="support-agent", tags=["production"])
+   769→def handle_support_ticket(message: str) -> str:
+   770→    return executor.invoke({"input": message})["output"]
+   771→
+   772→handle_support_ticket("I was charged twice, refund me.")
+   773→\`\`\`
+   774→
+   775→This records:
+   776→- Each LLM call (intent classification, response drafting, retries)
+   777→- Each tool call (\`lookup_customer\`, \`get_charges\`, \`issue_refund\`, …)
+   778→- Each retrieval (if your agent uses a retriever)
+   779→- The decision points where the agent chose which tool to call
+   780→
+   781→## What you'll see in the dashboard
+   782→
+   783→After a run, open the session. The timeline shows the agent's execution as a sequence of color-coded segments:
+   784→
+   785→- **Emerald** — LLM calls (intent classification, response drafting)
+   786→- **Sky** — tool calls (\`lookup_customer\`, \`issue_refund\`)
+   787→- **Violet** — retrievals (RAG policy lookup)
+   788→- **Amber** — decisions (routing)
+   789→- **Rose** — errors (the failed \`issue_refund\` call)
+   790→
+   791→Click any step to see its full input and output. For a failing run, the error step shows exactly what the tool returned — no more guessing why the agent "decided" to retry.
+   792→
+   793→## The common LangChain failure mode
+   794→
+   795→The most common LangChain agent bug: the agent **hallucinates a tool argument**. Here's the pattern ReplayAI catches:
+   796→
+   797→\`\`\`text
+   798→Step 5 (LLM): "I'll process the refund of $24.00."
+   799→Step 6 (Tool): issue_refund() → ERROR 403: requires approval_id
+   800→Step 7 (LLM): "I'll retry with approval_id='mgr_auto_2024'"  ← HALLUCINATED
+   801→Step 8 (Tool): issue_refund(retry) → ERROR 401: invalid token
+   802→\`\`\`
+   803→
+   804→Without ReplayAI, you'd see the final error in your logs and have no idea the agent fabricated an approval token. With the timeline, step 7's output makes the hallucination obvious — and you can replay it to test your fix.
+   805→
+   806→## Using callbacks directly (advanced)
+   807→
+   808→If you already use LangChain callbacks and don't want the decorator, you can attach the handler manually:
+   809→
+   810→\`\`\`python
+   811→from replayai.integrations.langchain import ReplayCallbackHandler
+   812→from langchain.agents import AgentExecutor
+   813→
+   814→handler = ReplayCallbackHandler(name="support-agent-v3", project="support-agent")
+   815→
+   816→executor = AgentExecutor(
+   817→    agent=agent,
+   818→    tools=tools,
+   819→    callbacks=[handler],
+   820→    verbose=True,
+   821→)
+   822→
+   823→# handler.flush() is called automatically on chain end
+   824→result = executor.invoke({"input": message})
+   825→\`\`\`
+   826→
+   827→## Streaming
+   828→
+   829→Streaming responses are recorded as a single step with the full aggregated output — not one step per token. The \`durationMs\` reflects the full stream time.
+   830→
+   831→\`\`\`python
+   832→@trace_agent("streaming-agent")
+   833→def stream_answer(message: str):
+   834→    for chunk in agent.stream(message):
+   835→        print(chunk, end="", flush=True)
+   836→\`\`\`
+   837→
+   838→## LangGraph
+   839→
+   840→LangGraph agents work out of the box — the tracer records each node invocation as a step. For graph-specific metadata (which edge was taken), use the \`trace_graph\` helper:
+   841→
+   842→\`\`\`python
+   843→from replayai.integrations.langchain import trace_graph
+   844→
+   845→@trace_graph("research-graph", project="research-agent")
+   846→def run_research(topic: str):
+   847→    return graph.invoke({"topic": topic})
+   848→\`\`\`
+   849→
+   850→This adds \`decision\` steps for each edge traversal, so the timeline shows the graph's branching structure.
+   851→`;
+   852→
+   853→const crewai = `# CrewAI Guide
+   854→
+   855→CrewAI runs multi-agent crews where agents collaborate on tasks. ReplayAI's CrewAI extra records every agent's LLM calls, tool calls, and task handoffs — so you can see exactly which agent in the crew broke.
+   856→
+   857→## Install
+   858→
+   859→\`\`\`bash
+   860→pip install "replayai[crewai]"
+   861→\`\`\`
+   862→
+   863→## Wrap a crew
+   864→
+   865→\`\`\`python
+   866→from replayai.integrations.crewai import trace_crew
+   867→
+   868→researcher = Agent(
+   869→    role="Researcher",
+   870→    goal="Find competitor pricing data",
+   871→    llm=ChatOpenAI(model="claude-3.5-sonnet"),
+   872→    tools=[web_search, fetch_page],
+   873→)
+   874→
+   875→analyst = Agent(
+   876→    role="Analyst",
+   877→    goal="Synthesize a comparison table",
+   878→    llm=ChatOpenAI(model="claude-3.5-sonnet"),
+   879→)
+   880→
+   881→crew = Crew(
+   882→    agents=[researcher, analyst],
+   883→    tasks=[
+   884→        Task(description="Find pricing for 5 observability tools", agent=researcher),
+   885→        Task(description="Build a comparison table", agent=analyst),
+   886→    ],
+   887→    process=Process.sequential,
+   888→)
+   889→
+   890→@trace_crew("research-agent-v2", project="research-agent", tags=["batch"])
+   891→def run_research(topic: str) -> str:
+   892→    return crew.kickoff(inputs={"topic": topic})
+   893→
+   894→run_research("AI agent observability pricing")
+   895→\`\`\`
+   896→
+   897→## What gets recorded
+   898→
+   899→Each agent's actions are recorded as steps, prefixed with the agent's role:
+   900→
+   901→- \`[Researcher] Decompose research question\` — LLM call
+   902→- \`[Researcher] web_search('AI agent observability pricing')\` — tool call
+   903→- \`[Researcher] Fetch & chunk pricing pages\` — retrieval (if using a RAG tool)
+   904→- \`[Researcher] Extract pricing per vendor\` — LLM call
+   905→- \`[Analyst] Synthesize comparison table\` — LLM call
+   906→
+   907→Task handoffs appear as \`decision\` steps showing which agent received the task and what context was passed.
+   908→
+   909→## Debugging crew failures
+   910→
+   911→CrewAI's most common failure: one agent produces output the next agent can't parse, causing a loop or a crash. The timeline makes this visible:
+   912→
+   913→\`\`\`text
+   914→Step 4 (LLM, Researcher): "5 vendor pricing cards extracted (JSON)"
+   915→Step 5 (Decision): task handoff → Analyst
+   916→Step 6 (LLM, Analyst): "I couldn't parse the pricing data. Retrying."  ← PARSE FAIL
+   917→Step 7 (LLM, Analyst): "I couldn't parse the pricing data. Retrying."  ← LOOP
+   918→Step 8 (Error): max_iterations exceeded
+   919→\`\`\`
+   920→
+   921→Diff this run against a successful one to see exactly where the Researcher's output format diverged from what the Analyst expected.
+   922→
+   923→## Delegation
+   924→
+   925→CrewAI's delegation feature (agents handing tasks to each other mid-run) is recorded as nested decision steps. The timeline shows the delegation chain so you can trace which agent delegated to whom.
+   926→
+   927→\`\`\`python
+   928→manager = Agent(
+   929→    role="Manager",
+   930→    goal="Coordinate the research",
+   931→    allow_delegation=True,
+   932→    llm=ChatOpenAI(model="gpt-4o"),
+   933→)
+   934→\`\`\`
+   935→
+   936→## Per-agent tracing
+   937→
+   938→If you want to trace a single agent in isolation (useful for unit testing one agent's behavior):
+   939→
+   940→\`\`\`python
+   941→from replayai.integrations.crewai import trace_agent
+   942→
+   943→@trace_agent("researcher-solo", project="research-agent")
+   944→def research(topic: str) -> str:
+   945→    return researcher.execute_task(Task(description=f"Research {topic}"))
+   946→\`\`\`
+   947→
+   948→## CrewAI + tools
+   949→
+   950→CrewAI tools (built-in or custom) are recorded automatically. For custom tools, make sure they're decorated with \`@tool\` so CrewAI exposes their schema — ReplayAI uses the schema to name the step:
+   951→
+   952→\`\`\`python
+   953→from crewai_tools import tool
+   954→
+   955→@tool("Fetch Pricing Page")
+   956→def fetch_pricing_page(url: str) -> str:
+   957→    """Fetch the pricing page at the given URL and return its text."""
+   958→    return httpx.get(url).text
+   959→\`\`\`
+   960→
+   961→The step will be named \`Fetch Pricing Page\` in the timeline, with \`url\` as the input and the page text as the output.
+   962→`;
+   963→
+   964→const llamaindex = `# LlamaIndex Guide
+   965→
+   966→LlamaIndex is the leading framework for RAG applications. ReplayAI's LlamaIndex extra records every retrieval, every LLM call, and every synthesis step.
+   967→
+   968→## Install
+   969→
+   970→\`\`\`bash
+   971→pip install "replayai[llama_index]"
+   972→\`\`\`
+   973→
+   974→## Wrap a query engine
+   975→
+   976→\`\`\`python
+   977→from replayai.integrations.llama_index import trace_query_engine
+   978→
+   979→index = VectorStoreIndex.from_documents(documents)
+   980→query_engine = index.as_query_engine(similarity_top_k=4)
+   981→
+   982→@trace_query_engine("docs-qa", project="docs-qa", tags=["rag"])
+   983→def answer(question: str) -> str:
+   984→    return query_engine.query(question).response
+   985→
+   986→answer("How many PTO days carry over?")
+   987→\`\`\`
+   988→
+   989→This records:
+   990→- The embedding + vector search (as a \`retrieval\` step, with the returned chunks as output)
+   991→- The prompt construction
+   992→- The LLM call (with full prompt and completion)
+   993→- The response synthesis
+   994→
+   995→## Wrap a chat engine
+   996→
+   997→Chat engines (with memory) work the same way — each turn is a session:
+   998→
+   999→\`\`\`python
+  1000→from replayai.integrations.llama_index import trace_chat_engine
+  1001→
+  1002→chat_engine = index.as_chat_engine(chat_mode="context")
+  1003→
+  1004→@trace_chat_engine("docs-chat", project="docs-qa")
+  1005→def chat(message: str) -> str:
+  1006→    return chat_engine.chat(message).response
+  1007→\`\`\`
+  1008→
+  1009→## What gets recorded for retrieval
+  1010→
+  1011→The \`retrieval\` step's output shows the actual chunks returned, their similarity scores, and their source nodes:
+  1012→
+  1013→\`\`\`text
+  1014→Step 1 (RAG): Embed query & search
+  1015→  input:  query = 'How many PTO days carry over?'
+  1016→  output: Top-4 chunks (cosine 0.82–0.91) from /hr/handbook
+  1017→          - chunk[0] (0.91): "Employees may carry over up to 5 PTO days..."
+  1018→          - chunk[1] (0.87): "Carryover days must be used by March 31..."
+  1019→          - chunk[2] (0.84): "PTO policy applies to all full-time staff..."
+  1020→          - chunk[3] (0.82): "Part-time staff accrue PTO proportionally..."
+  1021→\`\`\`
+  1022→
+  1023→This is invaluable for debugging "why did the RAG answer wrong?" — you see exactly what the retriever returned, not just the final answer.
+  1024→
+  1025→## Debugging retrieval quality
+  1026→
+  1027→The most common RAG failure: the retriever returns irrelevant chunks, and the LLM hallucinates from them. The timeline shows this clearly:
+  1028→
+  1029→\`\`\`text
+  1030→Step 1 (RAG): query='refund policy' → chunks about PTO and onboarding (low similarity)
+  1031→Step 2 (LLM): "Based on the policy, refunds are processed in 5 days..." ← HALLUCINATED
+  1032→\`\`\`
+  1033→
+  1034→Fix the retriever (better chunking, hybrid search, reranking) and re-run. Diff the before/after sessions to confirm the retrieved chunks improved.
+  1035→
+  1036→## Custom retrievers
+  1037→
+  1038→If you use a custom retriever (e.g. a hybrid search with a reranker), wrap it so ReplayAI records it as a single retrieval step:
+  1039→
+  1040→\`\`\`python
+  1041→from replayai import record_step
+  1042→
+  1043→class HybridRetriever:
+  1044→    def retrieve(self, query: str):
+  1045→        with record_step(
+  1046→            type="retrieval",
+  1047→            name="hybrid_search",
+  1048→            input=f"query = {query!r}",
+  1049→        ):
+  1050→            vector_results = self.vector_index.retrieve(query)
+  1051→            keyword_results = self.keyword_index.retrieve(query)
+  1052→            merged = self.reranker.rerank(query, vector_results + keyword_results)
+  1053→            return merged[:4]
+  1054→\`\`\`
+  1055→
+  1056→The step's output will be the merged, reranked chunks.
+  1057→`;
+  1058→
+  1059→const customAgents = `# Custom Agents
+  1060→
+  1061→Not using a framework? ReplayAI works with any agent — including hand-rolled ones built directly on the OpenAI or Anthropic SDK.
+  1062→
+  1063→## The minimal pattern
+  1064→
+  1065→Wrap your agent's entry point with \`trace()\` and record each step manually:
+  1066→
+  1067→\`\`\`python
+  1068→import openai
+  1069→from replayai import trace, record_step
+  1070→
+  1071→client = openai.OpenAI()
+  1072→
+  1073→@trace("support-agent-v3", project="support-agent", framework="Custom")
+  1074→def handle_support_ticket(message: str) -> str:
+  1075→    # 1. Classify intent (LLM call)
+  1076→    resp = client.chat.completions.create(
+  1077→        model="gpt-4o-mini",
+  1078→        messages=[
+  1079→            {"role": "system", "content": "Classify the intent."},
+  1080→            {"role": "user", "content": message},
+  1081→        ],
+  1082→    )
+  1083→    intent = resp.choices[0].message.content
+  1084→    record_step(
+  1085→        type="llm_call",
+  1086→        name="Classify intent",
+  1087→        model="gpt-4o-mini",
+  1088→        tokens_in=resp.usage.prompt_tokens,
+  1089→        tokens_out=resp.usage.completion_tokens,
+  1090→        input=message,
+  1091→        output=intent,
+  1092→        status="success",
+  1093→    )
+  1094→
+  1095→    # 2. Lookup customer (tool call)
+  1096→    customer = lookup_customer(extract_email(message))
+  1097→    record_step(
+  1098→        type="tool_call",
+  1099→        name="lookup_customer(email)",
+  1100→        input=f"email = {extract_email(message)}",
+  1101→        output=customer.model_dump_json(),
+  1102→        status="success",
+  1103→    )
+  1104→
+  1105→    # 3. Draft response (LLM call)
+  1106→    resp = client.chat.completions.create(
+  1107→        model="gpt-4o",
+  1108→        messages=[
+  1109→            {"role": "system", "content": "Draft a response."},
+  1110→            {"role": "user", "content": f"intent={intent}, customer={customer}"},
+  1111→        ],
+  1112→    )
+  1113→    response = resp.choices[0].message.content
+  1114→    record_step(
+  1115→        type="llm_call",
+  1116→        name="Draft response",
+  1117→        model="gpt-4o",
+  1118→        tokens_in=resp.usage.prompt_tokens,
+  1119→        tokens_out=resp.usage.completion_tokens,
+  1120→        input=f"intent={intent}, customer={customer}",
+  1121→        output=response,
+  1122→        status="success",
+  1123→    )
+  1124→
+  1125→    return response
+  1126→\`\`\`
+  1127→
+  1128→## A helper to reduce boilerplate
+  1129→
+  1130→Manual \`record_step\` calls get verbose. Wrap your LLM and tool calls:
+  1131→
+  1132→\`\`\`python
+  1133→from contextlib import contextmanager
+  1134→import time
+  1135→from replayai import record_step
+  1136→
+  1137→@contextmanager
+  1138→def step(type_: str, name: str, **kwargs):
+  1139→    """Context manager that records a step with automatic timing."""
+  1140→    start = time.perf_counter()
+  1141→    try:
+  1142→        yield
+  1143→    except Exception as e:
+  1144→        record_step(
+  1145→            type=type_,
+  1146→            name=name,
+  1147→            status="failed",
+  1148→            duration_ms=int((time.perf_counter() - start) * 1000),
+  1149→            output=f"ERROR: {e}",
+  1150→            **kwargs,
+  1151→        )
+  1152→        raise
+  1153→    else:
+  1154→        record_step(
+  1155→            type=type_,
+  1156→            name=name,
+  1157→            status="success",
+  1158→            duration_ms=int((time.perf_counter() - start) * 1000),
+  1159→            **kwargs,
+  1160→        )
+  1161→
+  1162→# Usage
+  1163→with step("llm_call", "Classify intent",
+  1164→          model="gpt-4o-mini", input=message,
+  1165→          tokens_in=resp.usage.prompt_tokens, tokens_out=resp.usage.completion_tokens,
+  1166→          output=intent):
+  1167→    resp = client.chat.completions.create(...)
+  1168→    intent = resp.choices[0].message.content
+  1169→\`\`\`
+  1170→
+  1171→## Wrapping the OpenAI client directly
+  1172→
+  1173→For a zero-boilerplate approach, monkey-patch (or wrap) the OpenAI client so every call is recorded:
+  1174→
+  1175→\`\`\`python
+  1176→import openai
+  1177→from replayai import record_step
+  1178→
+  1179→class TracedOpenAI:
+  1180→    def __init__(self):
+  1181→        self._client = openai.OpenAI()
+  1182→
+  1183→    @property
+  1184→    def chat(self):
+  1185→        return TracedChat(self._client.chat)
+  1186→
+  1187→class TracedChat:
+  1188→    def __init__(self, chat):
+  1189→        self.completions = TracedCompletions(chat.completions)
+  1190→
+  1191→class TracedCompletions:
+  1192→    def __init__(self, completions):
+  1193→        self._completions = completions
+  1194→
+  1195→    def create(self, **kwargs):
+  1196→        resp = self._completions.create(**kwargs)
+  1197→        record_step(
+  1198→            type="llm_call",
+  1199→            name=kwargs.get("model", "unknown") + " call",
+  1200→            model=kwargs.get("model"),
+  1201→            tokens_in=resp.usage.prompt_tokens,
+  1202→            tokens_out=resp.usage.completion_tokens,
+  1203→            input=str(kwargs.get("messages", "")),
+  1204→            output=resp.choices[0].message.content,
+  1205→            status="success",
+  1206→        )
+  1207→        return resp
+  1208→
+  1209→client = TracedOpenAI()
+  1210→\`\`\`
+  1211→
+  1212→Now every \`client.chat.completions.create()\` is recorded automatically — no manual steps needed. This is essentially what the framework extras do, generalized.
+  1213→
+  1214→## Anthropic SDK
+  1215→
+  1216→The same wrapper pattern works for Anthropic:
+  1217→
+  1218→\`\`\`python
+  1219→import anthropic
+  1220→
+  1221→client = anthropic.Anthropic()
+  1222→
+  1223→@trace("claude-agent", project="my-project")
+  1224→def run(message: str) -> str:
+  1225→    with step("llm_call", "Generate response", model="claude-3.5-sonnet"):
+  1226→        resp = client.messages.create(
+  1227→            model="claude-3.5-sonnet",
+  1228→            max_tokens=1024,
+  1229→            messages=[{"role": "user", "content": message}],
+  1230→        )
+  1231→        return resp.content[0].text
+  1232→\`\`\`
+  1233→`;
+  1234→
+  1235→const ciCd = `# CI/CD Integration
+  1236→
+  1237→The real value of ReplayAI is catching regressions before they reach production. This guide shows how to run replay tests in CI and gate deploys on them.
+  1238→
+  1239→## GitHub Actions
+  1240→
+  1241→Add a step that runs your exported replay tests after your unit tests:
+  1242→
+  1243→\`\`\`yaml
+  1244→# .github/workflows/ci.yml
+  1245→name: CI
+  1246→on: [push, pull_request]
+  1247→
+  1248→jobs:
+  1249→  test:
+  1250→    runs-on: ubuntu-latest
+  1251→    steps:
+  1252→      - uses: actions/checkout@v4
+  1253→      - uses: actions/setup-python@v5
+  1254→        with:
+  1255→          python-version: "3.12"
+  1256→      - run: pip install -r requirements.txt
+  1257→      - run: pip install replayai pytest
+  1258→
+  1259→      - name: Run unit tests
+  1260→        run: pytest tests/unit/
+  1261→
+  1262→      - name: Run replay regression tests
+  1263→        run: pytest tests/replay/
+  1264→        env:
+  1265→          REPLAYAI_STORAGE: cloud
+  1266→          REPLAYAI_TOKEN: \${{ secrets.REPLAYAI_TOKEN }}
+  1267→          # Replays are deterministic — no API keys needed
+  1268→          # The token is only for fetching the recording from cloud storage
+  1269→\`\`\`
+  1270→
+  1271→Replay tests run with **no LLM API keys** — every call is mocked from the recording. This means:
+  1272→
+  1273→- CI is free (no model inference)
+  1274→- CI is fast (no network latency for LLM calls)
+  1275→- CI is deterministic (no flaky tests from model non-determinism)
+  1276→
+  1277→## The replay test directory
+  1278→
+  1279→Organize exported tests by scenario:
+  1280→
+  1281→\`\`\`text
+  1282→tests/
+  1283→  unit/
+  1284→    test_classifier.py
+  1285→    test_tools.py
+  1286→  replay/
+  1287→    test_support_refund_failed.py        # exported from ses_8fa1
+  1288→    test_support_refund_fixed.py         # exported from ses_2c7e
+  1289→    test_research_competitor_pricing.py  # exported from ses_9bd0
+  1290→    test_sales_enrichment_loop.py        # exported from ses_4f2a
+  1291→\`\`\`
+  1292→
+  1293→Each test asserts the agent produces the same step sequence and status as the original recording. When you change your agent and a step diverges, the test fails with a clear diff.
+  1294→
+  1295→## Pre-deploy replay gate
+  1296→
+  1297→For agents in production, gate deploys on replay tests passing:
+  1298→
+  1299→\`\`\`yaml
+  1300→- name: Deploy gate
+  1301→  if: github.ref == 'refs/heads/main'
+  1302→  run: |
+  1303→    if ! pytest tests/replay/ --tb=short; then
+  1304→      echo "::error::Replay regression tests failed — deploy blocked."
+  1305→      echo "::error::A recorded scenario no longer reproduces. Fix the agent or update the baseline."
+  1306→      exit 1
+  1307→    fi
+  1308→\`\`\`
+  1309→
+  1310→## PR regression reports
+  1311→
+  1312→Use the ReplayAI GitHub Action to post a diff comment on PRs that change agent behavior:
+  1313→
+  1314→\`\`\`yaml
+  1315→- uses: replayai/regression-action@v1
+  1316→  with:
+  1317→    token: \${{ secrets.REPLAYAI_TOKEN }}
+  1318→    project: support-agent
+  1319→    # Runs all replay tests for this project and comments with any divergences
+  1320→\`\`\`
+  1321→
+  1322→The action posts a comment like:
+  1323→
+  1324→> **Replay regression detected**
+  1325→> 2 of 12 scenarios diverged on this branch:
+  1326→> - \`test_support_refund_failed\` — step 7 output changed (was "hallucinated token", now "approval requested")
+  1327→> - \`test_research_competitor_pricing\` — step 4 token count increased (was 6200, now 8100)
+  1328→> [View full diff →](https://app.replayai.dev/diff/pr-1234)
+  1329→
+  1330→## Live LLM drift detection
+  1331→
+  1332→Once a week, run replays in live-LLM mode to catch model drift (when OpenAI/Anthropic silently change model behavior):
+  1333→
+  1334→\`\`\`yaml
+  1335→# .github/workflows/drift.yml
+  1336→name: Model drift check
+  1337→on:
+  1338→  schedule:
+  1339→    - cron: "0 9 * * 1"  # every Monday 9am UTC
+  1340→
+  1341→jobs:
+  1342→  drift:
+  1343→    runs-on: ubuntu-latest
+  1344→    steps:
+  1345→      - uses: actions/checkout@v4
+  1346→      - run: pip install replayai pytest
+  1347→      - run: pytest tests/replay/ --live-llm
+  1348→        env:
+  1349→          OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
+  1350→          REPLAYAI_TOKEN: \${{ secrets.REPLAYAI_TOKEN }}
+  1351→\`\`\`
+  1352→
+  1353→If a previously-passing replay now produces different output, you get an alert that your model provider changed something — before your users notice.
+  1354→
+  1355→## GitLab CI / Jenkins / CircleCI
+  1356→
+  1357→The pattern is the same: install the SDK, run \`pytest tests/replay/\`. No special runner needed — replays are just pytest tests.
+  1358→`;
+  1359→
+  1360→const apiOverview = `# API Overview & Authentication
+  1361→
+  1362→The ReplayAI REST API lets you build custom integrations — ingest sessions from non-Python runtimes, build custom dashboards, or wire ReplayAI into your existing observability stack.
+  1363→
+  1364→## Base URL
+  1365→
+  1366→\`\`\`text
+  1367→Local:    http://localhost:7373/api
+  1368→Cloud:    https://api.replayai.dev/api
+  1369→\`\`\`
+  1370→
+  1371→All examples in this reference use the cloud URL. For local development, substitute \`http://localhost:7373\`.
+  1372→
+  1373→## Authentication
+  1374→
+  1375→Cloud mode uses bearer tokens. Get a token from **Settings → API Tokens** in the dashboard.
+  1376→
+  1377→\`\`\`bash
+  1378→curl https://api.replayai.dev/api/sessions \\
+  1379→  -H "Authorization: Bearer rai_live_abc123"
+  1380→\`\`\`
+  1381→
+  1382→Local mode requires no authentication — the local store is single-tenant.
+  1383→
+  1384→Tokens are scoped to a workspace. Within a workspace, a token can read all projects and write sessions. For finer-grained access (read-only, project-scoped), create a restricted token in settings.
+  1385→
+  1386→## Content type
+  1387→
+  1388→All request and response bodies are JSON (\`application/json\`). Upload endpoints (if any) use multipart form data.
+  1389→
+  1390→\`\`\`bash
+  1391→curl https://api.replayai.dev/api/sessions \\
+  1392→  -H "Authorization: Bearer rai_live_abc123" \\
+  1393→  -H "Content-Type: application/json"
+  1394→\`\`\`
+  1395→
+  1396→## Versioning
+  1397→
+  1398→The API is versioned via URL prefix: \`/api/\` is the current stable version. Breaking changes ship under \`/api/v2/\` with at least 6 months of overlap. We never make breaking changes within a version.
+  1399→
+  1400→## Rate limits
+  1401→
+  1402→Cloud mode applies the following limits per token:
+  1403→
+  1404→| Plan | Requests/min | Sessions/day |
+  1405→| --- | --- | --- |
+  1406→| Free | 60 | 100 |
+  1407→| Pro | 600 | 10,000 |
+  1408→| Enterprise | 6,000 | unlimited |
+  1409→
+  1410→Rate-limited responses return \`429\` with a \`Retry-After\` header.
+  1411→
+  1412→## Errors
+  1413→
+  1414→Errors use standard HTTP status codes with a JSON body:
+  1415→
+  1416→\`\`\`json
+  1417→{
+  1418→  "error": "Session not found"
+  1419→}
+  1420→\`\`\`
+  1421→
+  1422→| Status | Meaning |
+  1423→| --- | --- |
+  1424→| 400 | Bad request — malformed JSON or missing required field |
+  1425→| 401 | Unauthorized — missing or invalid token |
+  1426→| 403 | Forbidden — token lacks scope for this operation |
+  1427→| 404 | Not found — resource doesn't exist |
+  1428→| 409 | Conflict — duplicate resource (e.g. project slug) |
+  1429→| 429 | Rate limited |
+  1430→| 500 | Server error — retry with backoff |
+  1431→
+  1432→## SDK vs API
+  1433→
+  1434→When should you use the SDK vs the API directly?
+  1435→
+  1436→- **SDK** — instrumenting an agent (recording), running replays in tests. The SDK handles batching, retries, and redaction.
+  1437→- **API** — building custom tooling: a Slack bot that alerts on failures, a Grafana panel of session stats, ingesting from a language without an SDK (Rust, Go).
+  1438→
+  1439→The SDK is a thin wrapper over the API — everything the SDK does, you can do with raw HTTP.
+  1440→`;
+  1441→
+  1442→const apiProjects = `# Projects
+  1443→
+  1444→Projects group sessions by agent deployment. List, create, and inspect projects.
+  1445→
+  1446→## List projects
+  1447→
+  1448→\`\`\`bash
+  1449→curl https://api.replayai.dev/api/projects \\
+  1450→  -H "Authorization: Bearer rai_live_abc123"
+  1451→\`\`\`
+  1452→
+  1453→\`\`\`json
+  1454→{
+  1455→  "projects": [
+  1456→    {
+  1457→      "id": "cmqjx4oi70000rmien4pqnwy1",
+  1458→      "name": "Support Agent",
+  1459→      "slug": "support-agent",
+  1460→      "framework": "LangChain",
+  1461→      "description": "Customer support agent handling billing, refunds, and account queries.",
+  1462→      "createdAt": "2025-01-14T09:42:11.000Z",
+  1463→      "sessionCount": 2
+  1464→    }
+  1465→  ]
+  1466→}
+  1467→\`\`\`
+  1468→
+  1469→## Create a project
+  1470→
+  1471→\`\`\`bash
+  1472→curl -X POST https://api.replayai.dev/api/projects \\
+  1473→  -H "Authorization: Bearer rai_live_abc123" \\
+  1474→  -H "Content-Type: application/json" \\
+  1475→  -d '{
+  1476→    "name": "My New Agent",
+  1477→    "framework": "LangChain",
+  1478→    "description": "What this agent does."
+  1479→  }'
+  1480→\`\`\`
+  1481→
+  1482→\`\`\`json
+  1483→{
+  1484→  "project": {
+  1485→    "id": "cmqjx4oi70000rmien4pqnwy1",
+  1486→    "name": "My New Agent",
+  1487→    "slug": "my-new-agent",
+  1488→    "framework": "LangChain",
+  1489→    "description": "What this agent does.",
+  1490→    "createdAt": "2025-01-14T09:42:11.000Z"
+  1491→  }
+  1492→}
+  1493→\`\`\`
+  1494→
+  1495→The \`slug\` is auto-derived from \`name\` (lowercased, hyphenated). If the slug collides with an existing project, the API returns \`409\`.
+  1496→
+  1497→## Get a project
+  1498→
+  1499→\`\`\`bash
+  1500→curl https://api.replayai.dev/api/projects/support-agent \\
+  1501→  -H "Authorization: Bearer rai_live_abc123"
+  1502→\`\`\`
+  1503→
+  1504→Returns \`404\` if no project has that slug.
+  1505→
+  1506→## Fields
+  1507→
+  1508→| Field | Type | Description |
+  1509→| --- | --- | --- |
+  1510→| \`id\` | string | Stable cuid |
+  1511→| \`name\` | string | Human-readable name |
+  1512→| \`slug\` | string | URL-safe identifier, unique |
+  1513→| \`framework\` | string | \`LangChain\`, \`CrewAI\`, \`LlamaIndex\`, \`Custom\`, … |
+  1514→| \`description\` | string \| null | Free-form description |
+  1515→| \`createdAt\` | ISO 8601 | Creation timestamp |
+  1516→| \`sessionCount\` | number | Included in list/get responses |
+  1517→`;
+  1518→
+  1519→const apiSessions = `# Sessions
+  1520→
+  1521→Sessions are the core resource. List them with filters, fetch full details, ingest new recordings, update metadata, or delete.
+  1522→
+  1523→## List sessions
+  1524→
+  1525→\`\`\`bash
+  1526→curl "https://api.replayai.dev/api/sessions?projectId=cmqjx4oi7&status=failed&limit=20" \\
+  1527→  -H "Authorization: Bearer rai_live_abc123"
+  1528→\`\`\`
+  1529→
+  1530→### Query parameters
+  1531→
+  1532→| Param | Default | Description |
+  1533→| --- | --- | --- |
+  1534→| \`projectId\` | — | Filter to a project |
+  1535→| \`status\` | — | \`success\`, \`failed\`, or \`running\` |
+  1536→| \`q\` | — | Full-text search on name, agent, and tags |
+  1537→| \`limit\` | 100 | Max 200 |
+  1538→| \`offset\` | 0 | Pagination offset |
+  1539→| \`orderBy\` | \`startedAt\` | \`startedAt\`, \`durationMs\`, \`costUsd\`, or \`tokenTotal\` |
+  1540→| \`withSteps\` | 0 | Set to \`1\` to include full step payloads (heavier) |
+  1541→
+  1542→By default, list responses include a \`stepCount\` but not step payloads — fetch a single session for the full trace.
+  1543→
+  1544→\`\`\`json
+  1545→{
+  1546→  "sessions": [
+  1547→    {
+  1548→      "id": "ses_8fa1",
+  1549→      "projectId": "cmqjx4oi70000rmien4pqnwy1",
+  1550→      "name": "Customer Support — Refund Query #4821",
+  1551→      "agent": "support-agent-v3",
+  1552→      "framework": "LangChain",
+  1553→      "status": "failed",
+  1554→      "startedAt": "2025-01-14T09:42:11.000Z",
+  1555→      "durationMs": 18420,
+  1556→      "tokenTotal": 7420,
+  1557→      "costUsd": 0.094,
+  1558→      "tags": ["production", "refund-flow", "regression"],
+  1559→      "steps": [],
+  1560→      "stepCount": 8
+  1561→    }
+  1562→  ],
+  1563→  "total": 1,
+  1564→  "limit": 20,
+  1565→  "offset": 0
+  1566→}
+  1567→\`\`\`
+  1568→
+  1569→## Get a session
+  1570→
+  1571→\`\`\`bash
+  1572→curl https://api.replayai.dev/api/sessions/ses_8fa1 \\
+  1573→  -H "Authorization: Bearer rai_live_abc123"
+  1574→\`\`\`
+  1575→
+  1576→Returns the full session including all steps:
+  1577→
+  1578→\`\`\`json
+  1579→{
+  1580→  "session": {
+  1581→    "id": "ses_8fa1",
+  1582→    "name": "Customer Support — Refund Query #4821",
+  1583→    "status": "failed",
+  1584→    "steps": [
+  1585→      {
+  1586→        "id": "st_1",
+  1587→        "type": "llm_call",
+  1588→        "name": "Classify intent",
+  1589→        "t": 0,
+  1590→        "durationMs": 820,
+  1591→        "status": "success",
+  1592→        "model": "gpt-4o-mini",
+  1593→        "tokensIn": 312,
+  1594→        "tokensOut": 24,
+  1595→        "input": "User: 'I was charged twice...'",
+  1596→        "output": "intent: billing_dispute · confidence: 0.94"
+  1597→      }
+  1598→      // ...7 more steps
+  1599→    ]
+  1600→  }
+  1601→}
+  1602→\`\`\`
+  1603→
+  1604→## Ingest a session (SDK endpoint)
+  1605→
+  1606→This is the endpoint the SDK calls when a \`trace()\` context exits. You can call it directly to ingest from any runtime.
+  1607→
+  1608→\`\`\`bash
+  1609→curl -X POST https://api.replayai.dev/api/sessions \\
+  1610→  -H "Authorization: Bearer rai_live_abc123" \\
+  1611→  -H "Content-Type: application/json" \\
+  1612→  -d '{
+  1613→    "projectSlug": "support-agent",
+  1614→    "name": "Customer Support — Refund Query (live)",
+  1615→    "agent": "support-agent-v3",
+  1616→    "framework": "LangChain",
+  1617→    "tags": ["production", "refund-flow"],
+  1618→    "steps": [
+  1619→      {
+  1620→        "type": "llm_call",
+  1621→        "name": "Classify intent",
+  1622→        "t": 0,
+  1623→        "durationMs": 820,
+  1624→        "status": "success",
+  1625→        "model": "gpt-4o-mini",
+  1626→        "tokensIn": 312,
+  1627→        "tokensOut": 24,
+  1628→        "input": "User message...",
+  1629→        "output": "intent: billing_dispute"
+  1630→      },
+  1631→      {
+  1632→        "type": "tool_call",
+  1633→        "name": "issue_refund",
+  1634→        "t": 4960,
+  1635→        "durationMs": 1180,
+  1636→        "status": "failed",
+  1637→        "input": "charge_id=ch_002",
+  1638→        "output": "ERROR 403: requires approval_id"
+  1639→      }
+  1640→    ]
+  1641→  }'
+  1642→\`\`\`
+  1643→
+  1644→The API derives \`tokenTotal\`, \`costUsd\`, \`durationMs\`, and \`status\` from the steps if you don't provide them. The response includes the full session as created.
+  1645→
+  1646→## Update a session
+  1647→
+  1648→\`\`\`bash
+  1649→curl -X PATCH https://api.replayai.dev/api/sessions/ses_8fa1 \\
+  1650→  -H "Authorization: Bearer rai_live_abc123" \\
+  1651→  -H "Content-Type: application/json" \\
+  1652→  -d '{
+  1653→    "name": "Renamed session",
+  1654→    "tags": ["production", "investigated"]
+  1655→  }'
+  1656→\`\`\`
+  1657→
+  1658→Updatable fields: \`name\`, \`status\`, \`tags\`. Step contents are immutable.
+  1659→
+  1660→## Delete a session
+  1661→
+  1662→\`\`\`bash
+  1663→curl -X DELETE https://api.replayai.dev/api/sessions/ses_8fa1 \\
+  1664→  -H "Authorization: Bearer rai_live_abc123"
+  1665→\`\`\`
+  1666→
+  1667→Returns \`200 { "ok": true }\`. Deletion cascades to all steps. This is irreversible.
+  1668→
+  1669→## Session fields
+  1670→
+  1671→| Field | Type | Description |
+  1672→| --- | --- | --- |
+  1673→| \`id\` | string | Stable identifier |
+  1674→| \`projectId\` | string | Parent project |
+  1675→| \`name\` | string | Human-readable name |
+  1676→| \`agent\` | string | Agent identifier (e.g. \`support-agent-v3\`) |
+  1677→| \`framework\` | string | \`LangChain\`, \`CrewAI\`, … |
+  1678→| \`status\` | string | \`success\`, \`failed\`, \`running\` |
+  1679→| \`startedAt\` | ISO 8601 | When the run began |
+  1680→| \`durationMs\` | number | Wall-clock duration |
+  1681→| \`tokenTotal\` | number | Sum of tokens across LLM calls |
+  1682→| \`costUsd\` | number | Estimated cost |
+  1683→| \`tags\` | string[] | Free-form labels |
+  1684→| \`steps\` | Step[] | Ordered steps (full payload on get) |
+  1685→| \`stepCount\` | number | Included in list responses |
+  1686→
+  1687→## Step fields
+  1688→
+  1689→| Field | Type | Description |
+  1690→| --- | --- | --- |
+  1691→| \`id\` | string | Step identifier |
+  1692→| \`type\` | string | \`llm_call\`, \`tool_call\`, \`retrieval\`, \`decision\`, \`error\` |
+  1693→| \`name\` | string | Human-readable name |
+  1694→| \`t\` | number | Offset from session start (ms) |
+  1695→| \`durationMs\` | number | Step duration |
+  1696→| \`status\` | string | \`success\`, \`failed\`, \`running\`, \`warning\` |
+  1697→| \`model\` | string \| null | Model name (LLM calls only) |
+  1698→| \`tokensIn\` | number \| null | Input tokens (LLM calls only) |
+  1699→| \`tokensOut\` | number \| null | Output tokens (LLM calls only) |
+  1700→| \`input\` | string | Step input (args, prompt, query) |
+  1701→| \`output\` | string | Step output (result, completion, error) |
+  1702→`;
+  1703→
+  1704→const apiExport = `# Export
+  1705→
+  1706→Generate a runnable regression test from a recorded session. Supports pytest (Python) and jest (TypeScript).
+  1707→
+  1708→## Generate test (as text)
+  1709→
+  1710→\`\`\`bash
+  1711→curl "https://api.replayai.dev/api/sessions/ses_8fa1/export?lang=pytest" \\
+  1712→  -H "Authorization: Bearer rai_live_abc123"
+  1713→\`\`\`
+  1714→
+  1715→Returns the test file as plain text with \`Content-Type: text/x-python\`:
+  1716→
+  1717→\`\`\`python
+  1718→# Auto-generated by ReplayAI · session ses_8fa1
+  1719→# Replays the exact recorded conditions of: Customer Support — Refund Query #4821
+  1720→# pip install replayai
+  1721→import pytest
+  1722→from replayai import ReplaySession
+  1723→
+  1724→REPLAY_ID = "ses_8fa1"
+  1725→
+  1726→
+  1727→def test_customer_support_refund_query_4821(replay: ReplaySession):
+  1728→    """Replay recorded agent execution with mocked tool/RAG responses.
+  1729→
+  1730→    Original status: failed
+  1731→    Original duration: 18.4s
+  1732→    Steps recorded: 8
+  1733→    """
+  1734→    # --- Mocked deterministic responses (recorded from production) ---
+  1735→    # step 1: lookup_customer(email) → success
+  1736→    replay.mock("lookup_customer", '{"customer_id":"cus_8821",...}')
+  1737→    # step 2: get_charges(customer_id) → success
+  1738→    replay.mock("get_charges", '{"charges":[...]}')
+  1739→
+  1740→    # --- Re-run the agent under recorded conditions ---
+  1741→    with replay.trace() as trace:
+  1742→        result = replay.run(agent="support-agent-v3", framework="LangChain")
+  1743→
+  1744→    # --- Assertions based on the recorded baseline ---
+  1745→    assert trace.step_count == 8
+  1746→    assert trace.status == "failed"
+  1747→\`\`\`
+  1748→
+  1749→## Download as attachment
+  1750→
+  1751→Add \`&download=1\` to get a \`Content-Disposition: attachment\` header, useful for "Download" buttons:
+  1752→
+  1753→\`\`\`bash
+  1754→curl -OJ "https://api.replayai.dev/api/sessions/ses_8fa1/export?lang=pytest&download=1" \\
+  1755→  -H "Authorization: Bearer rai_live_abc123"
+  1756→# Saves as: ses_8fa1.py
+  1757→\`\`\`
+  1758→
+  1759→## jest output
+  1760→
+  1761→Set \`lang=jest\` for TypeScript:
+  1762→
+  1763→\`\`\`bash
+  1764→curl "https://api.replayai.dev/api/sessions/ses_8fa1/export?lang=jest" \\
+  1765→  -H "Authorization: Bearer rai_live_abc123"
+  1766→\`\`\`
+  1767→
+  1768→\`\`\`typescript
+  1769→// Auto-generated by ReplayAI · session ses_8fa1
+  1770→// npm install @replayai/sdk
+  1771→import { ReplaySession } from "@replayai/sdk";
+  1772→
+  1773→const REPLAY_ID = "ses_8fa1";
+  1774→
+  1775→describe("customer_support_refund_query_4821", () => {
+  1776→  it("replays recorded agent execution deterministically", async () => {
+  1777→    const replay = new ReplaySession(REPLAY_ID);
+  1778→    replay.mock("lookup_customer", '{"customer_id":"cus_8821",...}');
+  1779→
+  1780→    const trace = await replay.run({
+  1781→      agent: "support-agent-v3",
+  1782→      framework: "LangChain",
+  1783→    });
+  1784→
+  1785→    expect(trace.stepCount).toBe(8);
+  1786→    expect(trace.status).toBe("failed");
+  1787→  });
+  1788→});
+  1789→\`\`\`
+  1790→
+  1791→## What gets mocked
+  1792→
+  1793→Only \`tool_call\` and \`retrieval\` steps become mocks — these are the deterministic external calls. \`llm_call\` steps are replayed verbatim from the recording by default (toggle \`live_llm\` to re-invoke them).
+  1794→
+  1795→## Query parameters
+  1796→
+  1797→| Param | Default | Description |
+  1798→| --- | --- | --- |
+  1799→| \`lang\` | \`pytest\` | \`pytest\` or \`jest\` |
+  1800→| \`download\` | 0 | Set to \`1\` for attachment headers |
+  1801→
+  1802→## Response headers
+  1803→
+  1804→\`\`\`text
+  1805→Content-Type: text/x-python        # or text/typescript
+  1806→Content-Disposition: attachment; filename="ses_8fa1.py"  # only when download=1
+  1807→Cache-Control: no-store
+  1808→\`\`\`
+  1809→`;
+  1810→
+  1811→const apiStats = `# Stats
+  1812→
+  1813→Aggregate statistics across your workspace. Powers the dashboard's overview strip and is useful for custom monitoring.
+  1814→
+  1815→## Get workspace stats
+  1816→
+  1817→\`\`\`bash
+  1818→curl https://api.replayai.dev/api/stats \\
+  1819→  -H "Authorization: Bearer rai_live_abc123"
+  1820→\`\`\`
+  1821→
+  1822→\`\`\`json
+  1823→{
+  1824→  "totalSessions": 5,
+  1825→  "failedSessions": 2,
+  1826→  "successSessions": 3,
+  1827→  "runningSessions": 0,
+  1828→  "totalSteps": 29,
+  1829→  "totalTokens": 59200,
+  1830→  "totalCost": 0.806,
+  1831→  "projects": 4,
+  1832→  "failRate": 40,
+  1833→  "last30": [
+  1834→    { "status": "success", "count": 3 },
+  1835→    { "status": "failed", "count": 2 }
+  1836→  ],
+  1837→  "recentIds": ["ses_2c7e", "ses_1e8c", "ses_8fa1", "ses_9bd0", "ses_4f2a"]
+  1838→}
+  1839→\`\`\`
+  1840→
+  1841→## Fields
+  1842→
+  1843→| Field | Type | Description |
+  1844→| --- | --- | --- |
+  1845→| \`totalSessions\` | number | All sessions in workspace |
+  1846→| \`failedSessions\` | number | Sessions with \`status: failed\` |
+  1847→| \`successSessions\` | number | Sessions with \`status: success\` |
+  1848→| \`runningSessions\` | number | Sessions with \`status: running\` |
+  1849→| \`totalSteps\` | number | All steps across all sessions |
+  1850→| \`totalTokens\` | number | Sum of tokens across all LLM calls |
+  1851→| \`totalCost\` | number | Estimated cost (USD) |
+  1852→| \`projects\` | number | Project count |
+  1853→| \`failRate\` | number | Percentage (0–100) |
+  1854→| \`last30\` | array | Session counts by status in the last 30 days |
+  1855→| \`recentIds\` | string[] | IDs of the 5 most recent sessions |
+  1856→
+  1857→## Use cases
+  1858→
+  1859→### Alert on failure rate spike
+  1860→
+  1861→Poll \`/api/stats\` every minute and alert when \`failRate\` exceeds a threshold:
+  1862→
+  1863→\`\`\`python
+  1864→import httpx
+  1865→
+  1866→stats = httpx.get(
+  1867→    "https://api.replayai.dev/api/stats",
+  1868→    headers={"Authorization": f"Bearer {token}"},
+  1869→).json()
+  1870→
+  1871→if stats["failRate"] > 25:
+  1872→    alert_slack(f"ReplayAI fail rate spiked to {stats['failRate']}%")
+  1873→\`\`\`
+  1874→
+  1875→### Grafana panel
+  1876→
+  1877→Point Grafana's JSON API data source at \`/api/stats\` to chart session volume, fail rate, and cost over time.
+  1878→
+  1879→### Daily digest
+  1880→
+  1881→A cron job that fetches stats and emails a summary:
+  1882→
+  1883→\`\`\`text
+  1884→ReplayAI daily digest — 2025-01-14
+  1885→Sessions recorded: 1,204 (+12% vs yesterday)
+  1886→Fail rate: 8.3% (↑2.1pp)
+  1887→Cost: $42.18 (↑8%)
+  1888→Top failing agent: support-agent-v3 (47 failures)
+  1889→\`\`\`
+  1890→`;
+  1891→
+  1892→const apiWebhooks = `# Webhooks
+  1893→
+  1894→ReplayAI emits realtime events when sessions are created, updated, or deleted. Subscribe to them via WebSocket (for dashboards) or webhooks (for server-side integrations).
+  1895→
+  1896→## WebSocket (realtime)
+  1897→
+  1898→For browser dashboards and live UIs, connect to the WebSocket endpoint:
+  1899→
+  1900→\`\`\`javascript
+  1901→import { io } from "socket.io-client";
+  1902→
+  1903→const socket = io("/?XTransformPort=3003", {
+  1904→  transports: ["websocket", "polling"],
+  1905→});
+  1906→
+  1907→socket.on("session:created", (data) => {
+  1908→  console.log("New session:", data.session.id, data.session.name);
+  1909→});
+  1910→
+  1911→socket.on("session:updated", (data) => {
+  1912→  console.log("Session updated:", data.session.id);
+  1913→});
+  1914→
+  1915→socket.on("session:deleted", (data) => {
+  1916→  console.log("Session deleted:", data.id);
+  1917→});
+  1918→\`\`\`
+  1919→
+  1920→### Events
+  1921→
+  1922→| Event | Payload | When |
+  1923→| --- | --- | --- |
+  1924→| \`session:created\` | \`{ session: Session }\` | A new session is ingested |
+  1925→| \`session:updated\` | \`{ session: Session }\` | A session's name/status/tags change |
+  1926→| \`session:deleted\` | \`{ id: string }\` | A session is deleted |
+  1927→
+  1928→The WebSocket is fire-and-forget — events may be missed during reconnects. For guaranteed delivery, use HTTP webhooks.
+  1929→
+  1930→## HTTP webhooks (server-side)
+  1931→
+  1932→For server-side integrations (Slack alerts, PagerDuty, custom DB sync), register a webhook URL in **Settings → Webhooks**. ReplayAI POSTs events to your URL:
+  1933→
+  1934→\`\`\`bash
+  1935→POST https://your-app.com/webhooks/replayai
+  1936→Content-Type: application/json
+  1937→X-ReplayAI-Event: session:created
+  1938→X-ReplayAI-Signature: sha256=...
+  1939→
+  1940→{
+  1941→  "event": "session:created",
+  1942→  "session": { ... },
+  1943→  "timestamp": "2025-01-14T09:42:11.000Z"
+  1944→}
+  1945→\`\`\`
+  1946→
+  1947→### Verifying the signature
+  1948→
+  1949→Each webhook is signed with HMAC-SHA256 using your webhook secret. Verify before processing:
+  1950→
+  1951→\`\`\`python
+  1952→import hmac
+  1953→import hashlib
+  1954→
+  1955→def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
+  1956→    expected = "sha256=" + hmac.new(
+  1957→        secret.encode(), payload, hashlib.sha256
+  1958→    ).hexdigest()
+  1959→    return hmac.compare_digest(expected, signature)
+  1960→\`\`\`
+  1961→
+  1962→\`\`\`typescript
+  1963→import crypto from "node:crypto";
+  1964→
+  1965→function verifySignature(
+  1966→  payload: string,
+  1967→  signature: string,
+  1968→  secret: string,
+  1969→): boolean {
+  1970→  const expected =
+  1971→    "sha256=" +
+  1972→    crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  1973→  return crypto.timingSafeEqual(
+  1974→    Buffer.from(expected),
+  1975→    Buffer.from(signature),
+  1976→  );
+  1977→}
+  1978→\`\`\`
+  1979→
+  1980→## Slack alert on failure
+  1981→
+  1982→A webhook handler that alerts Slack when a session fails:
+  1983→
+  1984→\`\`\`typescript
+  1985→import express from "express";
+  1986→
+  1987→const app = express();
+  1988→
+  1989→app.post("/webhooks/replayai", express.raw({ type: "*/*" }), (req, res) => {
+  1990→  const signature = req.headers["x-replayai-signature"] as string;
+  1991→  if (!verifySignature(req.body, signature, process.env.REPLAYAI_WEBHOOK_SECRET!)) {
+  1992→    return res.status(401).send("invalid signature");
+  1993→  }
+  1994→
+  1995→  const event = req.headers["x-replayai-event"];
+  1996→  const { session } = JSON.parse(req.body);
+  1997→
+  1998→  if (event === "session:created" && session.status === "failed") {
+  1999→    fetch("https://hooks.slack.com/services/...", {
+  2000→      method: "POST",
+
+[showing lines 1-2000 of 2060; use offset=2001 with limit to continue reading]

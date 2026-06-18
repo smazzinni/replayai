@@ -74,3 +74,31 @@ model Step {
   @@index([sessionId])
   @@index([order])
 }
+
+/// A workspace-scoped API token used by the SDKs to authenticate session ingestion.
+model ApiToken {
+  id          String   @id @default(cuid())
+  /// The token value shown once at creation; stored hashed (sha256).
+  tokenHash   String   @unique
+  /// Prefix used for display (e.g. "rai_live_ab12…")
+  prefix      String
+  name        String   @default("Default")
+  /// live | readonly | test
+  scope       String   @default("live")
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+}
+
+/// Design-partner / early-access waitlist entries.
+model WaitlistEntry {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  company   String?
+  role      String?
+  teamSize  String?
+  useCase   String?
+  status    String   @default("pending") // pending | invited | onboarded
+  createdAt DateTime @default(now())
+}

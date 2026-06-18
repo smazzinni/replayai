@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { mapSession } from "@/lib/mappers";
 import { generateTest, type ExportLang } from "@/lib/replay-data";
+import { getAuthHeader, unauthorized, validateAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await validateAuth(getAuthHeader(req));
+  if (!auth.ok) return unauthorized(auth.error);
   const { id } = await params;
   const { searchParams } = new URL(req.url);
   const lang = (searchParams.get("lang") ?? "pytest") as ExportLang;

@@ -21,7 +21,7 @@ const COLUMNS: Column[] = [
       { label: "Features", href: "/#features" },
       { label: "Pricing", href: "/#pricing" },
       { label: "Roadmap", href: "/#roadmap" },
-      { label: "Changelog", href: "/#" },
+      { label: "Setup", href: "/?view=setup" },
     ],
   },
   {

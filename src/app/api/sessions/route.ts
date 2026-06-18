@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { mapSession, mapSessionSummary } from "@/lib/mappers";
 import { broadcast } from "@/lib/notify";
+import { getAuthHeader, unauthorized, validateAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ export const dynamic = "force-dynamic";
  * List sessions (without steps by default; add ?withSteps=1 to include).
  */
 export async function GET(req: NextRequest) {
+  const auth = await validateAuth(getAuthHeader(req));
+  if (!auth.ok) return unauthorized(auth.error);
+
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
   const status = searchParams.get("status"); // success | failed | running
@@ -72,6 +76,9 @@ export async function GET(req: NextRequest) {
  * Body shape matches what `replayai.trace()` flushes at the end of a run.
  */
 export async function POST(req: NextRequest) {
+  const auth = await validateAuth(getAuthHeader(req));
+  if (!auth.ok) return unauthorized(auth.error);
+
   let body: {
     projectId?: string;
     projectSlug?: string;
