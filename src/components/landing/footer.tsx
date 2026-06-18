@@ -2,22 +2,57 @@
 
 import { History } from "lucide-react";
 
-const COLUMNS = [
+interface LinkDef {
+  label: string;
+  href: string;
+  external?: boolean;
+}
+
+interface Column {
+  title: string;
+  links: LinkDef[];
+}
+
+const COLUMNS: Column[] = [
   {
     title: "Product",
-    links: ["Demo", "Features", "Pricing", "Roadmap", "Changelog"],
+    links: [
+      { label: "Demo", href: "/#demo" },
+      { label: "Features", href: "/#features" },
+      { label: "Pricing", href: "/#pricing" },
+      { label: "Roadmap", href: "/#roadmap" },
+      { label: "Changelog", href: "/#" },
+    ],
   },
   {
     title: "Developers",
-    links: ["Docs", "SDK reference", "LangChain guide", "CrewAI guide", "API"],
+    links: [
+      { label: "Docs", href: "/?view=developers&doc=introduction#developers" },
+      { label: "SDK reference", href: "/?view=developers&doc=sdk-python#developers" },
+      { label: "LangChain guide", href: "/?view=developers&doc=langchain#developers" },
+      { label: "CrewAI guide", href: "/?view=developers&doc=crewai#developers" },
+      { label: "API", href: "/?view=developers&doc=api-overview#developers" },
+    ],
   },
   {
     title: "Company",
-    links: ["About", "Blog", "Careers", "Contact", "Security"],
+    links: [
+      { label: "About", href: "/#" },
+      { label: "Blog", href: "/#" },
+      { label: "Careers", href: "/#" },
+      { label: "Contact", href: "/#" },
+      { label: "Security", href: "/#" },
+    ],
   },
   {
     title: "Community",
-    links: ["GitHub", "Discord", "r/LangChain", "X / Twitter", "YouTube"],
+    links: [
+      { label: "GitHub", href: "/#", external: true },
+      { label: "Discord", href: "/#", external: true },
+      { label: "r/LangChain", href: "/#", external: true },
+      { label: "X / Twitter", href: "/#", external: true },
+      { label: "YouTube", href: "/#", external: true },
+    ],
   },
 ];
 
@@ -39,10 +74,13 @@ export function Footer() {
               DVR for AI agent workflows. Record, replay, and debug
               non-deterministic systems — the dev tool your agents deserve.
             </p>
-            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] text-muted-foreground">
+            <a
+              href="/?view=developers&doc=quickstart#developers"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2.5 py-1.5 text-[11.5px] font-medium text-foreground/90 transition hover:border-primary/40 hover:text-primary"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              All systems recording
-            </div>
+              Read the docs →
+            </a>
           </div>
 
           {COLUMNS.map((c) => (
@@ -52,12 +90,12 @@ export function Footer() {
               </h4>
               <ul className="mt-3 space-y-2">
                 {c.links.map((l) => (
-                  <li key={l}>
+                  <li key={l.label}>
                     <a
-                      href="#"
+                      href={l.href}
                       className="text-[12.5px] text-muted-foreground transition hover:text-foreground"
                     >
-                      {l}
+                      {l.label}
                     </a>
                   </li>
                 ))}
