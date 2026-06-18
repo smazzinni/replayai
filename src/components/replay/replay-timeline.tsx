@@ -4,17 +4,20 @@ import { cn } from "@/lib/utils";
 import {
   fmtDuration,
   fmtOffset,
-  SESSIONS,
   STEP_META,
   STATUS_META,
   type AgentSession,
   type SessionStep,
 } from "@/lib/replay-data";
+import { api } from "@/lib/api";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  Download,
   FastForward,
+  Link2,
+  Loader2,
   Pause,
   Play,
   RotateCcw,
@@ -22,21 +25,31 @@ import {
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { CodeBlock } from "./code-block";
 
 interface ReplayTimelineProps {
   session: AgentSession;
+  isLoading?: boolean;
 }
 
-export function ReplayTimeline({ session }: ReplayTimelineProps) {
+export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [replayLlm, setReplayLlm] = useState(false);
+  const [prevSessionId, setPrevSessionId] = useState(session.id);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset playback when the session changes (adjust-state-during-render pattern).
+  if (session.id !== prevSessionId) {
+    setPrevSessionId(session.id);
+    setIndex(0);
+    setPlaying(false);
+  }
 
   const step = session.steps[index];
   const total = session.steps.length;
-  const progress = ((index + 1) / total) * 100;
+  const progress = total > 0 ? ((index + 1) / total) * 100 : 0;
 
   const advance = useCallback(() => {
     setIndex((i) => {
@@ -57,6 +70,23 @@ export function ReplayTimeline({ session }: ReplayTimelineProps) {
     };
   }, [playing, index, step, advance]);
 
+  const share = async () => {
+    const url = `${window.location.origin}/?s=${session.id}#demo`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied", {
+        description: "Anyone with the link can replay this session.",
+      });
+    } catch {
+      toast.error("Couldn't copy link");
+    }
+  };
+
+  const download = (lang: "pytest" | "jest") => {
+    window.open(api.exportUrl(session.id, lang, true), "_blank");
+    toast.success(`Downloading ${lang} test…`);
+  };
+
   const restart = () => {
     setIndex(0);
     setPlaying(false);
@@ -70,6 +100,19 @@ export function ReplayTimeline({ session }: ReplayTimelineProps) {
   // build proportional segment widths from durations
   const totalDur = session.steps.reduce((a, s) => a + s.durationMs, 0) || 1;
 
+  if (isLoading || total === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-[12.5px]">
+            {isLoading ? "Loading session…" : "This session has no steps."}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Session header */}
@@ -82,16 +125,26 @@ export function ReplayTimeline({ session }: ReplayTimelineProps) {
                   "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-medium",
                   session.status === "failed"
                     ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
-                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                    : session.status === "running"
+                      ? "border-sky-500/30 bg-sky-500/10 text-sky-300"
+                      : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
                 )}
               >
                 <span
                   className={cn(
                     "h-1.5 w-1.5 rounded-full",
-                    session.status === "failed" ? "bg-rose-400" : "bg-emerald-400",
+                    session.status === "failed"
+                      ? "bg-rose-400"
+                      : session.status === "running"
+                        ? "bg-sky-400"
+                        : "bg-emerald-400",
                   )}
                 />
-                {session.status === "failed" ? "Failed" : "Succeeded"}
+                {session.status === "failed"
+                  ? "Failed"
+                  : session.status === "running"
+                    ? "Running"
+                    : "Succeeded"}
               </span>
               <span className="font-mono text-[11px] text-muted-foreground">
                 {session.id}
@@ -109,8 +162,21 @@ export function ReplayTimeline({ session }: ReplayTimelineProps) {
               <span className="opacity-40">·</span>
               <span>{session.tokenTotal.toLocaleString()} tok</span>
               <span className="opacity-40">·</span>
-              <span>{fmtOffset(session.durationMs).replace("+", "ended +")}</span>
+              <span>
+                {fmtOffset(session.durationMs).replace("+", "ended +")}
+              </span>
             </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              onClick={share}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-[11.5px] font-medium text-muted-foreground transition hover:text-foreground hover:bg-muted/40"
+              title="Copy shareable link"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+            <DownloadMenu onPick={download} />
           </div>
         </div>
       </div>
@@ -423,5 +489,56 @@ function StepDetail({
   );
 }
 
-// re-export for convenience in dashboard
-export { SESSIONS };
+function DownloadMenu({
+  onPick,
+}: {
+  onPick: (lang: "pytest" | "jest") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-[11.5px] font-medium text-muted-foreground transition hover:text-foreground hover:bg-muted/40"
+        title="Export as test"
+      >
+        <Download className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Export</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-md border border-border/60 bg-popover shadow-xl">
+          {([
+            { id: "pytest" as const, label: "pytest", sub: ".py" },
+            { id: "jest" as const, label: "jest", sub: ".test.ts" },
+          ]).map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => {
+                onPick(opt.id);
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between px-3 py-2 text-[12px] text-foreground/90 transition hover:bg-muted/60"
+            >
+              {opt.label}
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {opt.sub}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

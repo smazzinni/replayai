@@ -7,8 +7,11 @@ import {
   type AgentSession,
   type ExportLang,
 } from "@/lib/replay-data";
-import { FileCode2, FlaskConical, Github, Terminal } from "lucide-react";
+import { api } from "@/lib/api";
+import { useSession } from "@/hooks/use-api";
+import { FileCode2, FlaskConical, Github, Loader2, Terminal } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { CodeBlock } from "./code-block";
 
 interface ExportViewProps {
@@ -16,12 +19,15 @@ interface ExportViewProps {
 }
 
 export function ExportView({ sessions }: ExportViewProps) {
+  const failed = sessions.find((s) => s.status === "failed");
   const [sessionId, setSessionId] = useState(
-    sessions.find((s) => s.status === "failed")?.id ?? sessions[0]?.id ?? "",
+    failed?.id ?? sessions[0]?.id ?? "",
   );
   const [lang, setLang] = useState<ExportLang>("pytest");
 
-  const session = sessions.find((s) => s.id === sessionId);
+  const q = useSession(sessionId || null);
+  const session = q.data;
+
   const code = useMemo(
     () => (session ? generateTest(session, lang) : ""),
     [session, lang],
@@ -31,6 +37,12 @@ export function ExportView({ sessions }: ExportViewProps) {
     ? session.steps.filter((s) => s.type === "tool_call" || s.type === "retrieval")
         .length
     : 0;
+
+  const download = () => {
+    if (!session) return;
+    window.open(api.exportUrl(session.id, lang, true), "_blank");
+    toast.success(`Downloading ${lang} test…`);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -66,12 +78,10 @@ export function ExportView({ sessions }: ExportViewProps) {
               Framework
             </span>
             <div className="inline-flex rounded-md border border-border/60 p-0.5">
-              {(
-                [
-                  { id: "pytest" as const, label: "pytest", icon: Terminal },
-                  { id: "jest" as const, label: "jest", icon: FileCode2 },
-                ]
-              ).map((opt) => {
+              {([
+                { id: "pytest" as const, label: "pytest", icon: Terminal },
+                { id: "jest" as const, label: "jest", icon: FileCode2 },
+              ]).map((opt) => {
                 const Icon = opt.icon;
                 return (
                   <button
@@ -91,6 +101,14 @@ export function ExportView({ sessions }: ExportViewProps) {
               })}
             </div>
           </div>
+          <button
+            onClick={download}
+            disabled={!session}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-[12.5px] font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+          >
+            <FileCode2 className="h-3.5 w-3.5" />
+            Download
+          </button>
         </div>
 
         {session && (
@@ -120,13 +138,19 @@ export function ExportView({ sessions }: ExportViewProps) {
             </span>
           </div>
           <div className="scrollbar-thin h-full overflow-auto p-3">
-            <CodeBlock
-              code={code}
-              language={lang === "pytest" ? "python" : "typescript"}
-              numbered
-              maxHeight="max-h-[520px]"
-              showCopy
-            />
+            {q.isLoading ? (
+              <div className="flex h-40 items-center justify-center text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              </div>
+            ) : (
+              <CodeBlock
+                code={code}
+                language={lang === "pytest" ? "python" : "typescript"}
+                numbered
+                maxHeight="max-h-[520px]"
+                showCopy
+              />
+            )}
           </div>
         </div>
 

@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,20 +10,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+/// A logical grouping of agent sessions (e.g. one per agent deployment).
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  framework   String   @default("Custom")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  sessions    Session[]
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+/// A single recorded agent execution — fully replayable.
+model Session {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  agent       String
+  framework   String
+  /// success | failed | running
+  status      String
+  startedAt   DateTime
+  durationMs  Int      @default(0)
+  tokenTotal  Int      @default(0)
+  costUsd     Float    @default(0)
+  /// comma-separated tags (SQLite has no array primitive)
+  tags        String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  steps       Step[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+/// A single step within a session: an LLM call, tool call, retrieval, decision, or error.
+model Step {
+  id          String   @id @default(cuid())
+  sessionId   String
+  /// ordering index within the session
+  order       Int
+  /// llm_call | tool_call | retrieval | decision | error
+  type        String
+  name        String
+  /// ms offset from session start
+  offsetMs    Int      @default(0)
+  durationMs  Int      @default(0)
+  /// success | failed | running | warning
+  status      String
+  model       String?
+  tokensIn    Int?
+  tokensOut   Int?
+  input       String
+  output      String
+  createdAt   DateTime @default(now())
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([order])
 }
