@@ -8,7 +8,8 @@ import {
   STATUS_META,
   type AgentSession,
 } from "@/lib/replay-data";
-import { ArrowRight, GitCompareArrows, Minus, Plus } from "lucide-react";
+import { useSession } from "@/hooks/use-api";
+import { ArrowRight, GitCompareArrows, Loader2, Minus, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface DiffViewProps {
@@ -19,8 +20,10 @@ export function DiffView({ sessions }: DiffViewProps) {
   const [leftId, setLeftId] = useState(sessions[0]?.id ?? "");
   const [rightId, setRightId] = useState(sessions[1]?.id ?? "");
 
-  const left = sessions.find((s) => s.id === leftId);
-  const right = sessions.find((s) => s.id === rightId);
+  const leftQ = useSession(leftId || null);
+  const rightQ = useSession(rightId || null);
+  const left = leftQ.data;
+  const right = rightQ.data;
 
   const rows = useMemo(() => {
     if (!left || !right) return [];
@@ -29,6 +32,7 @@ export function DiffView({ sessions }: DiffViewProps) {
 
   const divergeIdx = rows.findIndex((r) => r.kind !== "same");
   const divergeCount = rows.filter((r) => r.kind !== "same").length;
+  const loading = leftQ.isLoading || rightQ.isLoading;
 
   return (
     <div className="flex h-full flex-col">
@@ -98,42 +102,51 @@ export function DiffView({ sessions }: DiffViewProps) {
       </div>
 
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-        <div className="min-w-[640px]">
-          {/* header row */}
-          <div className="sticky top-0 z-10 grid grid-cols-2 border-b border-border/60 bg-background/95 backdrop-blur">
-            <div className="border-r border-border/60 px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {left?.name ?? "—"}
-            </div>
-            <div className="px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {right?.name ?? "—"}
-            </div>
+        {loading ? (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
-
-          {rows.map((row, i) => {
-            const l = row.left;
-            const r = row.right;
-            const highlight = row.kind !== "same";
-            return (
-              <div
-                key={i}
-                className={cn(
-                  "grid grid-cols-2 border-b border-border/40",
-                  highlight && "bg-amber-500/[0.04]",
-                )}
-              >
-                <DiffCell
-                  step={l}
-                  kind={row.kind}
-                  side="left"
-                  note={highlight ? row.note : undefined}
-                />
-                <div className="border-l border-border/60">
-                  <DiffCell step={r} kind={row.kind} side="right" />
-                </div>
+        ) : !left || !right ? (
+          <div className="px-4 py-12 text-center text-[12.5px] text-muted-foreground">
+            Select two sessions to compare.
+          </div>
+        ) : (
+          <div className="min-w-[640px]">
+            <div className="sticky top-0 z-10 grid grid-cols-2 border-b border-border/60 bg-background/95 backdrop-blur">
+              <div className="border-r border-border/60 px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {left.name}
               </div>
-            );
-          })}
-        </div>
+              <div className="px-4 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {right.name}
+              </div>
+            </div>
+
+            {rows.map((row, i) => {
+              const l = row.left;
+              const r = row.right;
+              const highlight = row.kind !== "same";
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "grid grid-cols-2 border-b border-border/40",
+                    highlight && "bg-amber-500/[0.04]",
+                  )}
+                >
+                  <DiffCell
+                    step={l}
+                    kind={row.kind}
+                    side="left"
+                    note={highlight ? row.note : undefined}
+                  />
+                  <div className="border-l border-border/60">
+                    <DiffCell step={r} kind={row.kind} side="right" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
