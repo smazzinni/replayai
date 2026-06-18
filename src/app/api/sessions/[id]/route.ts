@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { mapSessionWithProject } from "@/lib/mappers";
 import { broadcast } from "@/lib/notify";
+import { getAuthHeader, unauthorized, validateAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await validateAuth(getAuthHeader(req));
+  if (!auth.ok) return unauthorized(auth.error);
   const { id } = await params;
   const session = await db.session.findUnique({
     where: { id },
@@ -27,6 +30,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await validateAuth(getAuthHeader(req));
+  if (!auth.ok) return unauthorized(auth.error);
   const { id } = await params;
   let body: {
     name?: string;
@@ -73,9 +78,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await validateAuth(getAuthHeader(req));
+  if (!auth.ok) return unauthorized(auth.error);
   const { id } = await params;
   try {
     await db.session.delete({ where: { id } });

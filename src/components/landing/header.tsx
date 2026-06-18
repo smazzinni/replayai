@@ -69,7 +69,7 @@ export function Header() {
             Sign in
           </a>
           <motion.a
-            href="#cta"
+            href="/?view=setup"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90"

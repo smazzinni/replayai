@@ -1,0 +1,135 @@
+// ReplayAI TypeScript SDK — configuration.
+// Reads env vars on first access; `configure()` overrides programmatically.
+
+import type { ConfigOptions } from "./types.js";
+
+/** Default redaction patterns. Applied to every step's input/output. */
+export const DEFAULT_REDACT_PATTERNS: RegExp[] = [
+  /sk-[a-zA-Z0-9]{20,}/g, // OpenAI-style API keys
+  /Bearer\s+[a-zA-Z0-9._\-]+/g, // Authorization header tokens
+  /password=[^\s&]+/gi, // password=... in URLs / form bodies
+  /["']?api[_-]?key["']?\s*[:=]\s*["']?[a-zA-Z0-9]{20,}/gi, // api_key=...
+];
+
+export type StorageMode = "local" | "cloud" | "both";
+
+export interface ResolvedConfig {
+  project?: string;
+  token?: string;
+  storage: StorageMode;
+  storagePath: string;
+  apiUrl: string;
+  dashboardUrl: string;
+  sampleRate: number;
+  strict: boolean;
+  redactPatterns: RegExp[];
+}
+
+function envString(name: string, fallback?: string): string | undefined {
+  const v = process.env[name];
+  return v === undefined || v === "" ? fallback : v;
+}
+
+function envNumber(name: string, fallback: number): number {
+  const v = process.env[name];
+  if (v === undefined || v === "") return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function envBool(name: string, fallback: boolean): boolean {
+  const v = process.env[name];
+  if (v === undefined || v === "") return fallback;
+  return v === "1" || v.toLowerCase() === "true" || v.toLowerCase() === "yes" || v.toLowerCase() === "on";
+}
+
+function parseRedactPatterns(raw: string | undefined): RegExp[] | null {
+  if (!raw || raw.trim() === "") return null;
+  const out: RegExp[] = [];
+  for (const piece of raw.split(",")) {
+    const p = piece.trim();
+    if (!p) continue;
+    try {
+      out.push(new RegExp(p, "g"));
+    } catch {
+      // If the user supplied a malformed regex, escape it and try again.
+      const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      try {
+        out.push(new RegExp(escaped, "g"));
+      } catch {
+        /* skip unparseable */
+      }
+    }
+  }
+  return out.length > 0 ? out : null;
+}
+
+let cached: ResolvedConfig | null = null;
+let overrides: ConfigOptions = {};
+
+/** Resolve the active config from env vars + programmatic overrides. */
+export function resolveConfig(): ResolvedConfig {
+  if (cached) return cached;
+
+  const storageRaw = overrides.storage ?? envString("REPLAYAI_STORAGE") ?? "cloud";
+  const storage: StorageMode =
+    storageRaw === "local" || storageRaw === "cloud" || storageRaw === "both"
+      ? storageRaw
+      : "cloud";
+
+  let redactPatterns: RegExp[] | null = null;
+  if (overrides.redactPatterns) {
+    redactPatterns = overrides.redactPatterns.map((p) =>
+      typeof p === "string" ? safeRegex(p) : p,
+    );
+  } else {
+    redactPatterns = parseRedactPatterns(envString("REPLAYAI_REDACT_PATTERNS"));
+  }
+
+  cached = {
+    project: overrides.project ?? envString("REPLAYAI_PROJECT"),
+    token: overrides.token ?? envString("REPLAYAI_TOKEN"),
+    storage,
+    storagePath: overrides.storagePath ?? envString("REPLAYAI_STORAGE_PATH") ?? "./replays",
+    apiUrl: (overrides.apiUrl ?? envString("REPLAYAI_API_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
+    dashboardUrl: overrides.dashboardUrl ?? envString("REPLAYAI_DASHBOARD_URL") ?? "http://localhost:3000",
+    sampleRate: overrides.sampleRate ?? envNumber("REPLAYAI_SAMPLE_RATE", 1.0),
+    strict: overrides.strict ?? envBool("REPLAYAI_STRICT", false),
+    redactPatterns: redactPatterns ?? [...DEFAULT_REDACT_PATTERNS],
+  };
+  return cached;
+}
+
+function safeRegex(s: string): RegExp {
+  try {
+    return new RegExp(s, "g");
+  } catch {
+    return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+  }
+}
+
+/** Update SDK config programmatically. Only supplied keys are changed. */
+export function configure(opts: ConfigOptions): ResolvedConfig {
+  overrides = { ...overrides, ...opts };
+  cached = null; // force re-resolve on next read
+  return resolveConfig();
+}
+
+/** Get the active config (re-resolves if `configure()` was called). */
+export function getConfig(): ResolvedConfig {
+  return resolveConfig();
+}
+
+/** Reset to env-only config. Useful for tests. */
+export function resetConfig(): void {
+  overrides = {};
+  cached = null;
+}
+
+/** Module-level strict flag, mirrored from config.strict (parity with Python SDK). */
+export let strict_mode: boolean = resolveConfig().strict;
+
+export function _syncStrictFlag(): void {
+  // Re-import trick: reassign the exported let.
+  // (Called by configure via _sync below.)
+}

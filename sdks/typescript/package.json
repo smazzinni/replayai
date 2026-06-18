@@ -1,0 +1,50 @@
+{
+  "name": "@replayai/sdk",
+  "version": "0.4.1",
+  "description": "TypeScript SDK for ReplayAI — instrument JS/TS agents, record sessions, replay & export tests.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node -e \"require('fs').mkdirSync('dist/cjs',{recursive:true});require('fs').writeFileSync('dist/cjs/package.json','{\\\"type\\\":\\\"commonjs\\\"}\\n')\"",
+    "prepublishOnly": "bun run build",
+    "version-check": "node -e \"console.log(require('./dist/cjs/index.js').VERSION)\"",
+    "quickstart": "bun examples/quickstart.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "replayai",
+    "ai",
+    "agents",
+    "observability",
+    "testing",
+    "llm",
+    "tracing"
+  ]
+}

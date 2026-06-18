@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "replayai"
+version = "0.4.1"
+description = "Python SDK for ReplayAI — instrument agents, record sessions, replay in the dashboard."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "ReplayAI", email = "dev@replayai.dev" }]
+keywords = ["llm", "agents", "observability", "replay", "tracing", "testing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=0.2.0"]
+llama_index = ["llama-index>=0.10.0"]
+crewai = ["crewai>=0.30.0"]
+dev = ["pytest>=7.0", "ruff>=0.4.0"]
+
+[project.urls]
+Homepage = "https://replayai.dev"
+Documentation = "https://replayai.dev?view=developers"
+Repository = "https://github.com/replayai/replayai"
+Issues = "https://github.com/replayai/replayai/issues"
+
+[tool.setuptools]
+packages = ["replayai", "replayai.integrations"]

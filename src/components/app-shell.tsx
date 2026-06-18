@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { DOCS } from "@/lib/docs-content";
 import { DocsApp } from "@/components/docs/docs-app";
+import { OnboardingApp } from "@/components/onboarding/onboarding-app";
 import { Dashboard } from "@/components/replay/dashboard";
 import { CTA } from "@/components/landing/cta";
 import { Features } from "@/components/landing/features";
@@ -13,6 +14,7 @@ import { Pricing } from "@/components/landing/pricing";
 import { Problem } from "@/components/landing/problem";
 import { Roadmap } from "@/components/landing/roadmap";
 import { SectionHeading } from "@/components/landing/problem";
+import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { MousePointerClick } from "lucide-react";
 import { Suspense } from "react";
 
@@ -53,6 +55,23 @@ function Landing() {
         <Features />
         <Pricing />
         <Roadmap />
+
+        {/* Design partner program */}
+        <section
+          id="design-partners"
+          className="relative mx-auto max-w-4xl px-4 py-20 sm:px-6"
+        >
+          <SectionHeading
+            center
+            eyebrow="Design partners"
+            title="Ship with us. Get free Pro for a year."
+            sub="We're onboarding 25 teams building production AI agents. Get white-glove setup, direct access to the founders, priority features, and 12 months of Pro — free."
+          />
+          <div className="mt-10">
+            <WaitlistForm />
+          </div>
+        </section>
+
         <CTA />
       </main>
       <Footer />
@@ -68,6 +87,10 @@ export function AppShell() {
     const docSlug = params.get("doc") ?? "introduction";
     const validSlug = DOCS[docSlug] ? docSlug : "introduction";
     return <DocsApp initialDoc={validSlug} />;
+  }
+
+  if (view === "setup") {
+    return <OnboardingApp />;
   }
 
   return <Landing />;
