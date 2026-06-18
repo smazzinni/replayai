@@ -10,6 +10,7 @@ const NAV = [
   { label: "Features", href: "#features" },
   { label: "Pricing", href: "#pricing" },
   { label: "Roadmap", href: "#roadmap" },
+  { label: "Docs", href: "/?view=developers&doc=introduction#developers" },
 ];
 
 export function Header() {

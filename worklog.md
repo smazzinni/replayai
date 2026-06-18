@@ -85,3 +85,30 @@ Stage Summary:
 - Realtime verified end-to-end THROUGH THE GATEWAY (port 81): curl create/delete → WS broadcast to 2 connected clients → browser UI updates live WITHOUT any local mutation. (On direct localhost:3000 the WS doesn't connect because there's no Caddy in front; the real user preview uses port 81 where it works. The app degrades gracefully — own mutations still invalidate locally.)
 - Agent Browser verified: Play advances steps, Live LLM toggle, Record creates + appears, project filter (3 support sessions), stats live (6/3 failed/50%), deep-link reload selects shared session, diff "8 steps diverge", export pytest+jest code + Content-Disposition download, mobile 390px no overflow, sticky footer, zero console errors, lint clean.
 - Services running: Next.js dev (3000), recording-service (3003, 2 clients). DB seeded (4 projects, 5 sessions, 29 steps).
+
+---
+Task ID: 10-14
+Agent: main (orchestrator)
+Task: Build the full Developer Documentation site (Docs, SDK reference, LangChain guide, CrewAI guide, API) — production-ready
+
+Work Log:
+- Authored 18-page docs content tree in `src/lib/docs-content.ts` covering: Introduction, Installation, Quick Start, Core Concepts, Python SDK, TypeScript SDK, Configuration, LangChain, CrewAI, LlamaIndex, Custom Agents, CI/CD, API Overview & Auth, API Projects, API Sessions, API Export, API Stats, API Webhooks. All content matches the actual SDK surface area and REST API implemented in the app.
+- Built `src/lib/docs-utils.ts` (slugify + extractToc for h2/h3 headings).
+- Built `src/components/docs/markdown.tsx` — react-markdown renderer with shadcn-styled elements (headings with anchor IDs, tables, blockquotes, lists, inline code, links) and fenced code blocks rendered via the existing CodeBlock component (with copy buttons + language labels).
+- Built `src/components/docs/docs-app.tsx` — full docs shell:
+  - Sticky top bar with logo, "Docs" badge, search trigger (Cmd/K), "Back to app" link.
+  - Left sidebar: 4 categories × 18 pages, active highlighting, badge support ("Popular").
+  - Center content: breadcrumb, markdown, prev/next pager, "Edit on GitHub" footer.
+  - Right "On this page" TOC: auto-generated from h2/h3, IntersectionObserver scroll-spy with active highlighting, click-to-scroll.
+  - Mobile: sidebar collapses into a drawer (Menu button), TOC hidden.
+  - Search dialog (Cmd/K): fuzzy search across all 18 pages with title/category/content-snippet matching, keyboard nav (↑↓ + Enter), result count.
+- Built `src/components/app-shell.tsx` — view switcher: `?view=developers` renders DocsApp, else renders the landing page. URL-synced (?view=developers&doc=<slug>#developers).
+- Rewrote `src/app/page.tsx` to render `<Suspense><AppShell/></Suspense>`.
+- Wired footer "Developers" column: Docs→introduction, SDK reference→sdk-python, LangChain guide→langchain, CrewAI guide→crewai, API→api-overview. Added "Read the docs →" CTA.
+- Added "Docs" entry to the header nav.
+- Fixed lint: setState-in-effect (→ adjust-during-render pattern) and a template-literal escaping issue in the webhooks content (inner backtick template literals → string concat).
+
+Stage Summary:
+- All 5 footer developer links are now live, navigable docs pages — verified end-to-end through the gateway.
+- Agent Browser verified: sidebar nav (all 4 categories, 18 pages), URL sync on nav, On-this-page TOC scroll-spy (active highlight updates on scroll), code blocks render with copy buttons + language labels, Cmd/K search with keyboard nav, internal markdown links navigate, prev/next pager, footer links from landing → correct docs page, header Docs link, mobile (390px) sidebar collapses to drawer + no horizontal overflow + code blocks fit.
+- Regression check: landing page hero + dashboard (7 sessions from API) + recording service (3 clients) all still healthy. Lint clean, zero console errors.
