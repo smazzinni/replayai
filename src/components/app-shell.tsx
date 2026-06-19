@@ -64,7 +64,7 @@ function Landing() {
           <SectionHeading
             center
             eyebrow="Design partners"
-            title="Ship with us. Get free Pro for a year."
+            title="Partner with US"
             sub="We're onboarding 25 teams building production AI agents. Get white-glove setup, direct access to the founders, priority features, and 12 months of Pro — free."
           />
           <div className="mt-10">

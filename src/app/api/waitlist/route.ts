@@ -78,6 +78,31 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Forward the design-partner signup to Rioforge.com (fire-and-forget).
+  try {
+    await fetch("https://rioforge.com/api/contact", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: email,
+        name: body.name?.trim() || "—",
+        company: body.company?.trim() || "—",
+        message: [
+          "ReplayAI Design Partner Program Signup",
+          "",
+          "Name: " + (body.name?.trim() || "—"),
+          "Email: " + email,
+          "Company: " + (body.company?.trim() || "—"),
+          "Role: " + (body.role?.trim() || "—"),
+          "Team size: " + (body.teamSize || "—"),
+          "Use case: " + (body.useCase?.trim() || "—"),
+        ].join("\n"),
+      }),
+    });
+  } catch {
+    // Rioforge may be down; local signup still succeeds.
+  }
+
   const position =
     (await db.waitlistEntry.count({
       where: { createdAt: { lte: entry.createdAt } },

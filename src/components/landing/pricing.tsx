@@ -64,7 +64,7 @@ export function Pricing() {
       <SectionHeading
         center
         eyebrow="Pricing"
-        title="Land free. Expand to the team."
+        title="Simple, transparent pricing"
         sub="Free tier gets individual devs hooked on replay-driven debugging. The enterprise tier sells to their manager the moment they need compliance, sharing, or on-prem."
       />
 

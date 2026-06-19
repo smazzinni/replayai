@@ -8,7 +8,10 @@
 import { db } from "@/lib/db";
 import crypto from "node:crypto";
 
-const DEV_MODE = process.env.REPLAYAI_DEV === "1";
+/** Check dev mode at call time (not module load) so env changes take effect. */
+function isDevMode(): boolean {
+  return process.env.REPLAYAI_DEV === "1";
+}
 
 export interface AuthResult {
   ok: boolean;
@@ -43,11 +46,35 @@ export async function validateAuth(
   authHeader: string | null,
 ): Promise<AuthResult> {
   // Dev bypass #1: explicit env flag.
-  if (DEV_MODE) {
+  if (isDevMode()) {
     return { ok: true, devBypass: true };
   }
 
-  // Dev bypass #2: no tokens have been issued yet — open access for first-run.
+  // If a bearer token is provided, validate it against the DB.
+  // This avoids a DB query for unauthenticated requests.
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const raw = authHeader.slice("Bearer ".length).trim();
+    if (raw) {
+      const hash = hashToken(raw);
+      const token = await db.apiToken.findUnique({
+        where: { tokenHash: hash },
+      });
+      if (token && !token.revokedAt) {
+        // Update last-used (fire-and-forget, never blocks).
+        void db.apiToken
+          .update({
+            where: { id: token.id },
+            data: { lastUsedAt: new Date() },
+          })
+          .catch(() => {});
+        return { ok: true, tokenId: token.id };
+      }
+      return { ok: false, error: "Invalid or revoked token" };
+    }
+  }
+
+  // No token provided — check if any tokens exist.
+  // If none exist, allow access (first-run / setup mode).
   const tokenCount = await db.apiToken.count({
     where: { revokedAt: null },
   });
@@ -55,28 +82,8 @@ export async function validateAuth(
     return { ok: true, devBypass: true };
   }
 
-  // Production path: require a valid bearer token.
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return { ok: false, error: "Missing or malformed Authorization header" };
-  }
-  const raw = authHeader.slice("Bearer ".length).trim();
-  if (!raw) {
-    return { ok: false, error: "Empty bearer token" };
-  }
-  const hash = hashToken(raw);
-  const token = await db.apiToken.findUnique({
-    where: { tokenHash: hash },
-  });
-  if (!token || token.revokedAt) {
-    return { ok: false, error: "Invalid or revoked token" };
-  }
-
-  // Update last-used (fire-and-forget, never blocks).
-  void db.apiToken
-    .update({ where: { id: token.id }, data: { lastUsedAt: new Date() } })
-    .catch(() => {});
-
-  return { ok: true, tokenId: token.id };
+  // Tokens exist but none was provided.
+  return { ok: false, error: "Missing Authorization header" };
 }
 
 /** Extract the Authorization header from a NextRequest. */
