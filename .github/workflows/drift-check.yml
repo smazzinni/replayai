@@ -1,0 +1,78 @@
+# ReplayAI Model Drift Check — weekly cron that runs replays in live-LLM mode
+# to detect when OpenAI/Anthropic silently change model behavior.
+name: Model Drift Check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # every Monday 9am UTC
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ReplayAI SDK + pytest
+        run: |
+          pip install replayai-sdk[test]
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run replay tests in live-LLM mode
+        id: drift
+        run: |
+          if [ -d tests/replay ]; then
+            set +e
+            output=$(replayai test tests/replay/ --live-llm --tb=short 2>&1)
+            exit_code=$?
+            echo "output<<EOF" >> $GITHUB_OUTPUT
+            echo "$output" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          else
+            echo "output=No replay tests found." >> $GITHUB_OUTPUT
+            echo "exit_code=0" >> $GITHUB_OUTPUT
+          fi
+        env:
+          REPLAYAI_API_URL: ${{ secrets.REPLAYAI_API_URL || 'http://localhost:3000' }}
+          REPLAYAI_TOKEN: ${{ secrets.REPLAYAI_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Create issue if drift detected
+        if: steps.drift.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `${{ steps.drift.outputs.output }}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Model drift detected — replay tests failed in live-LLM mode',
+              body: `## Model Drift Alert
+
+            A previously-passing replay test now produces different output in live-LLM mode.
+            This likely means your model provider (OpenAI/Anthropic) silently changed model behavior.
+
+            <details><summary>Test output</summary>
+
+            \`\`\`
+            ${output.slice(-3000)}
+            \`\`\`
+            </details>
+
+            **Action required:**
+            1. Review the diff in the dashboard
+            2. If the new output is better, update the baseline recording
+            3. If the new output is worse, pin the model version or adjust your prompts
+            `,
+              labels: ['model-drift', 'alert'],
+            });

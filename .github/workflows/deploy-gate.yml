@@ -1,0 +1,49 @@
+# ReplayAI Pre-Deploy Gate — blocks production deploys if replay tests fail.
+# Runs on pushes to main (after merge) and gates the deploy step.
+name: Pre-Deploy Replay Gate
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  replay-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ReplayAI SDK + pytest
+        run: |
+          pip install replayai-sdk[test]
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run replay regression tests (deploy gate)
+        run: |
+          if [ -d tests/replay ]; then
+            echo "::notice::Running replay regression tests as deploy gate..."
+            replayai test tests/replay/ --tb=short
+          else
+            echo "::notice::No replay tests — skipping deploy gate."
+          fi
+        env:
+          REPLAYAI_API_URL: ${{ secrets.REPLAYAI_API_URL || 'http://localhost:3000' }}
+          REPLAYAI_TOKEN: ${{ secrets.REPLAYAI_TOKEN }}
+
+      - name: Deploy gate passed
+        if: success()
+        run: |
+          echo "::notice::Replay gate passed — safe to deploy."
+
+      - name: Deploy gate failed
+        if: failure()
+        run: |
+          echo "::error::Replay regression tests failed — deploy blocked."
+          echo "::error::A recorded scenario no longer reproduces. Fix the agent or update the baseline."
+          exit 1

@@ -1,0 +1,116 @@
+# ReplayAI PR Regression Report — posts a comment on PRs that change agent behavior.
+# Runs replay tests and comments with any divergences found.
+name: Replay Regression Report
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "sdks/**"
+      - "tests/replay/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  replay-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ReplayAI SDK + pytest
+        run: |
+          pip install replayai-sdk[test]
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run replay regression tests
+        id: replay
+        run: |
+          if [ -d tests/replay ]; then
+            set +e
+            output=$(replayai test tests/replay/ --tb=short 2>&1)
+            exit_code=$?
+            echo "output<<EOF" >> $GITHUB_OUTPUT
+            echo "$output" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+            if [ $exit_code -eq 0 ]; then
+              echo "status=passed" >> $GITHUB_OUTPUT
+            else
+              echo "status=failed" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "output=No replay tests directory found." >> $GITHUB_OUTPUT
+            echo "exit_code=0" >> $GITHUB_OUTPUT
+          fi
+        env:
+          REPLAYAI_API_URL: ${{ secrets.REPLAYAI_API_URL || 'http://localhost:3000' }}
+          REPLAYAI_TOKEN: ${{ secrets.REPLAYAI_TOKEN }}
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ steps.replay.outputs.status }}';
+            const output = `${{ steps.replay.outputs.output }}`;
+            const exitCode = '${{ steps.replay.outputs.exit_code }}';
+
+            const icon = status === 'passed' ? '✅' : status === 'failed' ? '❌' : '⏭️';
+            const color = status === 'passed' ? 'good' : status === 'failed' ? 'danger' : 'warning';
+
+            const body = `## ${icon} Replay Regression Report
+
+            **Status:** ${status.toUpperCase()}
+
+            ${status === 'failed' ? `> ⚠️ **Replay regressions detected** — a recorded scenario no longer reproduces. Fix the agent or update the baseline.
+
+            ` : ''}${status === 'passed' ? `All replay tests passed — no regressions detected.
+
+            ` : ''}${status === 'skipped' ? `No replay tests found. Export a failing session as a test via the dashboard, then commit it to \`tests/replay/\`.
+
+            ` : ''}<details><summary>Test output</summary>
+
+            \`\`\`
+            ${output.slice(-3000)}
+            \`\`\`
+            </details>
+
+            [View dashboard →](${{ secrets.REPLAYAI_DASHBOARD_URL || 'http://localhost:3000' }})`;
+
+            // Find existing comment to update
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Replay Regression Report')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+            if (status === 'failed') {
+              core.setFailed('Replay regressions detected — see comment above.');
+            }

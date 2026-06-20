@@ -51,4 +51,10 @@ prompt
 
 server.log
 # Skills directory
-/skills/
+/skills/.env
+*.egg-info/
+sdks/python/dist/
+sdks/python/build/
+skills/
+*.html
+bun.lock

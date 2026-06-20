@@ -1,0 +1,51 @@
+# ReplayAI CI — runs unit tests + replay regression tests on every PR.
+# Replay tests are deterministic (no API keys needed — mocks come from recordings).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ReplayAI SDK + pytest
+        run: |
+          pip install replayai-sdk[test]
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run unit tests
+        run: |
+          if [ -d tests/unit ]; then
+            pytest tests/unit/ -v --tb=short
+          else
+            echo "No unit tests directory — skipping"
+          fi
+
+      - name: Run replay regression tests
+        run: |
+          if [ -d tests/replay ]; then
+            replayai test tests/replay/ --tb=short
+          else
+            echo "No replay tests directory — skipping"
+          fi
+        env:
+          REPLAYAI_API_URL: ${{ secrets.REPLAYAI_API_URL || 'http://localhost:3000' }}
+          REPLAYAI_TOKEN: ${{ secrets.REPLAYAI_TOKEN }}
