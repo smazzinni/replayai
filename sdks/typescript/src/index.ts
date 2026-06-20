@@ -25,7 +25,7 @@ import type {
 } from "./types.js";
 
 /** SDK version. */
-export const VERSION = "0.4.1";
+export const VERSION = "0.4.2";
 
 export {
   trace,

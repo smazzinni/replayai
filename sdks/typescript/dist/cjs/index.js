@@ -25,7 +25,7 @@ const redact_js_1 = require("./redact.js");
 Object.defineProperty(exports, "redactText", { enumerable: true, get: function () { return redact_js_1.redactText; } });
 Object.defineProperty(exports, "redactOptional", { enumerable: true, get: function () { return redact_js_1.redactOptional; } });
 /** SDK version. */
-exports.VERSION = "0.4.1";
+exports.VERSION = "0.4.2";
 // Default export is a namespace object — handy for CJS consumers and as a
 // single `import replayai from "@smazzinni/sdk"` import.
 const replayai = {

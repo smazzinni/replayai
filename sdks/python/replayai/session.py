@@ -86,32 +86,33 @@ class ReplaySession:
         return _ReplayTraceContext(self)
 
     # ----- run -----
-    def run(self, *, agent: str, framework: str = "Custom") -> Any:
-        """Re-execute the agent.
+    def run(self, *, agent: str, framework: str = "Custom") -> Trace:
+        """Re-execute the agent under recorded conditions.
 
-        In this MVP, full re-execution is delegated to the exported
-        pytest harness (``export(lang="pytest")``). ``run()`` returns the
-        final step output, with any registered mocks applied.
+        Fetches the session from the API, applies any registered mocks, and
+        returns a :class:`Trace` view with ``step_count``, ``status``,
+        ``steps``, etc. — matching the TypeScript SDK's return shape.
         """
         if not agent:
             raise ValueError("agent is required")
         sess = self._fetch()
         steps = self._apply_mocks(list(sess.get("steps", [])))
-        # Find the last successful step's output as the "result".
-        last_output: Any = None
-        for s in reversed(steps):
-            if s.get("status") == "success":
-                last_output = s.get("output")
-                break
-        if last_output is None and steps:
-            last_output = steps[-1].get("output")
+        trace = Trace()
+        trace.steps = steps
+        trace.step_count = len(steps)
+        trace.status = sess.get("status", "success")
+        trace.duration_ms = int(sess.get("durationMs", 0) or 0)
+        trace.token_total = int(sess.get("tokenTotal", 0) or 0)
+        trace.cost_usd = float(sess.get("costUsd", 0) or 0.0)
+        trace.session_id = sess.get("id")
+        trace.session_url = dashboard_url_for(sess.get("id", ""))
         # If there's an active replay trace context, append the steps into it
         # so the resulting Trace reflects what was "replayed".
         ctx = current_session()
         if ctx is not None and ctx.session is not None:
             for s in steps:
                 _append_step(ctx.session, s)
-        return last_output
+        return trace
 
     # ----- export -----
     def export(self, lang: str = "pytest") -> str:

@@ -21,7 +21,7 @@ from .session import ReplaySession
 from .steps import arecord_step, record_step
 from .store import StoreError, dashboard_url_for, flush_session
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 __all__ = [
     "__version__",

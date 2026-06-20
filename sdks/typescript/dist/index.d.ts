@@ -7,7 +7,7 @@ import { estimateCost, estimateStepCost } from "./cost.js";
 import { redactText, redactOptional } from "./redact.js";
 import type { AgentProject, AgentSession, ConfigOptions, ExportLang, InternalSession, RecordStepInput, ReplaySessionOptions, RunOptions, SessionStatus, SessionStep, StepStatus, StepType, Trace, TraceOptions } from "./types.js";
 /** SDK version. */
-export declare const VERSION = "0.4.1";
+export declare const VERSION = "0.4.2";
 export { trace, withTrace, recordStep, recordStepSync, configure, getConfig, resetConfig, currentSession, ReplaySession, flushSession, getLastFlushResult, estimateCost, estimateStepCost, redactText, redactOptional, };
 export type { AgentProject, AgentSession, ConfigOptions, ExportLang, InternalSession, RecordStepInput, ReplaySessionOptions, RunOptions, SessionStatus, SessionStep, StepStatus, StepType, Trace, TraceOptions, };
 declare const replayai: {
