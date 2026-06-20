@@ -70,9 +70,26 @@ model Step {
   createdAt   DateTime @default(now())
 
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  comments    Comment[]
 
   @@index([sessionId])
   @@index([order])
+}
+
+/// Comments on individual steps — for async debugging and team collaboration.
+model Comment {
+  id          String   @id @default(cuid())
+  stepId      String
+  sessionId   String
+  author      String   @default("anonymous")
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  step        Step     @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([stepId])
+  @@index([sessionId])
 }
 
 /// A workspace-scoped API token used by the SDKs to authenticate session ingestion.

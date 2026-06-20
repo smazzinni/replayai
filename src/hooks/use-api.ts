@@ -97,4 +97,68 @@ export function useCreateProject() {
   });
 }
 
+// ---------- Comments ----------
+
+export interface StepComment {
+  id: string;
+  stepId: string;
+  sessionId: string;
+  author: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useComments(stepId: string | null) {
+  return useQuery({
+    queryKey: ["comments", stepId],
+    queryFn: async () => {
+      const r = await fetch(`/api/comments?stepId=${stepId}`, { cache: "no-store" });
+      if (!r.ok) throw new Error("Failed to fetch comments");
+      const data = await r.json();
+      return data.comments as StepComment[];
+    },
+    enabled: !!stepId,
+  });
+}
+
+export function useAddComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      stepId: string;
+      sessionId: string;
+      author: string;
+      body: string;
+    }) => {
+      const r = await fetch("/api/comments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!r.ok) {
+        const b = await r.json().catch(() => ({}));
+        throw new Error(b.error ?? "Failed to add comment");
+      }
+      return r.json();
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["comments", variables.stepId] });
+    },
+  });
+}
+
+export function useDeleteComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/comments/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("Failed to delete comment");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comments"] });
+    },
+  });
+}
+
 export type { AgentSession, Project, Stats };

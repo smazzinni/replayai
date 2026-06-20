@@ -18,15 +18,20 @@ import {
   FastForward,
   Link2,
   Loader2,
+  MessageSquare,
   Pause,
   Play,
   RotateCcw,
+  Send,
   Terminal,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CodeBlock } from "./code-block";
+import { RelativeTime } from "./relative-time";
+import { useComments, useAddComment, useDeleteComment } from "@/hooks/use-api";
 
 interface ReplayTimelineProps {
   session: AgentSession;
@@ -331,7 +336,7 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
               transition={{ duration: 0.18 }}
               className="p-4"
             >
-              <StepDetail step={step} replayLlm={replayLlm} />
+              <StepDetail step={step} replayLlm={replayLlm} sessionId={session.id} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -343,9 +348,11 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
 function StepDetail({
   step,
   replayLlm,
+  sessionId,
 }: {
   step: SessionStep;
   replayLlm: boolean;
+  sessionId: string;
 }) {
   const meta = STEP_META[step.type];
   const status = STATUS_META[step.status];
@@ -495,6 +502,134 @@ function StepDetail({
           </>
         )}
       </div>
+
+      <StepComments stepId={step.id} sessionId={sessionId} />
+    </div>
+  );
+}
+
+function StepComments({
+  stepId,
+  sessionId,
+}: {
+  stepId: string;
+  sessionId: string;
+}) {
+  const { data: comments, isLoading } = useComments(stepId);
+  const addComment = useAddComment();
+  const deleteComment = useDeleteComment();
+  const [text, setText] = useState("");
+  const [author, setAuthor] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    addComment.mutate(
+      {
+        stepId,
+        sessionId,
+        author: author.trim() || "anonymous",
+        body: text.trim(),
+      },
+      {
+        onSuccess: () => {
+          setText("");
+          toast.success("Comment added");
+        },
+        onError: (err) =>
+          toast.error("Failed to add comment", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          }),
+      },
+    );
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border border-border/60 bg-background/30">
+      <div className="flex items-center gap-1.5 border-b border-border/50 px-3 py-2 text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">
+        <MessageSquare className="h-3 w-3 text-primary" />
+        Comments
+        {comments && comments.length > 0 && (
+          <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[9px] text-primary">
+            {comments.length}
+          </span>
+        )}
+      </div>
+
+      <div className="max-h-40 overflow-y-auto scrollbar-thin p-2">
+        {isLoading ? (
+          <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+            Loading…
+          </div>
+        ) : !comments || comments.length === 0 ? (
+          <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+            No comments yet. Add one for async debugging notes.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {comments.map((c) => (
+              <div
+                key={c.id}
+                className="group relative rounded-md border border-border/40 bg-background/40 px-2.5 py-1.5"
+              >
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <span className="font-medium text-foreground/80">
+                    {c.author}
+                  </span>
+                  <span className="opacity-50">·</span>
+                  <RelativeTime iso={c.createdAt} />
+                </div>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-foreground/90 whitespace-pre-wrap break-words">
+                  {c.body}
+                </p>
+                <button
+                  onClick={() => {
+                    if (confirm("Delete this comment?"))
+                      deleteComment.mutate(c.id, {
+                        onSuccess: () => toast.success("Comment deleted"),
+                      });
+                  }}
+                  className="absolute right-1.5 top-1.5 hidden rounded p-0.5 text-muted-foreground transition hover:text-rose-400 group-hover:block"
+                  title="Delete comment"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="border-t border-border/50 p-2"
+      >
+        <input
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          placeholder="Your name (optional)"
+          className="mb-1.5 h-7 w-full rounded-md border border-border/50 bg-background/40 px-2 text-[11px] outline-none transition focus:border-primary/60"
+        />
+        <div className="flex gap-1.5">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Add a comment…"
+            className="h-8 flex-1 rounded-md border border-border/50 bg-background/40 px-2 text-[12px] outline-none transition focus:border-primary/60"
+          />
+          <button
+            type="submit"
+            disabled={!text.trim() || addComment.isPending}
+            className="inline-flex h-8 items-center rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40"
+          >
+            {addComment.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

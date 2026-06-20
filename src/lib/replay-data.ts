@@ -49,6 +49,16 @@ export interface Project {
   sessionCount?: number;
 }
 
+export interface StepComment {
+  id: string;
+  stepId: string;
+  sessionId: string;
+  author: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ---------- formatting ----------
 
 const m = (min: number) => `${String(min).padStart(2, "0")}m`;
