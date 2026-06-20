@@ -10,7 +10,7 @@ import { redactText, redactOptional } from "./redact.js";
 export const VERSION = "0.4.1";
 export { trace, withTrace, recordStep, recordStepSync, configure, getConfig, resetConfig, currentSession, ReplaySession, flushSession, getLastFlushResult, estimateCost, estimateStepCost, redactText, redactOptional, };
 // Default export is a namespace object — handy for CJS consumers and as a
-// single `import replayai from "@replayai/sdk"` import.
+// single `import replayai from "@smazzinni/sdk"` import.
 const replayai = {
     VERSION,
     trace,

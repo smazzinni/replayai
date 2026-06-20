@@ -1,4 +1,4 @@
-# @replayai/sdk
+# @smazzinni/sdk
 
 TypeScript SDK for [ReplayAI](https://github.com/replayai) — instrument JS/TS agents, record sessions, and replay/export them as tests.
 
@@ -9,15 +9,15 @@ TypeScript SDK for [ReplayAI](https://github.com/replayai) — instrument JS/TS 
 ## Install
 
 ```bash
-bun add @replayai/sdk
+bun add @smazzinni/sdk
 # or
-npm install @replayai/sdk
+npm install @smazzinni/sdk
 ```
 
 ## 30-second usage
 
 ```typescript
-import { withTrace, recordStep, configure } from "@replayai/sdk";
+import { withTrace, recordStep, configure } from "@smazzinni/sdk";
 
 // Point at a running ReplayAI app (default: http://localhost:3000)
 configure({ apiUrl: "http://localhost:3000" });
@@ -56,7 +56,7 @@ await withTrace(
 Wraps an existing function so each call records a session.
 
 ```typescript
-import { trace } from "@replayai/sdk";
+import { trace } from "@smazzinni/sdk";
 
 export const handleSupportTicket = trace(
   "support-agent-v3",
@@ -97,7 +97,7 @@ await recordStep({
 Load a recorded session and either re-run it or export it as a test.
 
 ```typescript
-import { ReplaySession } from "@replayai/sdk";
+import { ReplaySession } from "@smazzinni/sdk";
 
 const replay = new ReplaySession("ses_8fa1", { liveLlm: false });
 
@@ -128,7 +128,7 @@ configure({
 ### `VERSION`
 
 ```typescript
-import { VERSION } from "@replayai/sdk";
+import { VERSION } from "@smazzinni/sdk";
 console.log(VERSION); // "0.4.1"
 ```
 
@@ -156,10 +156,10 @@ Both are supported. The `exports` field routes automatically:
 
 ```javascript
 // ESM
-import { trace } from "@replayai/sdk";
+import { trace } from "@smazzinni/sdk";
 
 // CJS
-const { trace } = require("@replayai/sdk");
+const { trace } = require("@smazzinni/sdk");
 ```
 
 ## License

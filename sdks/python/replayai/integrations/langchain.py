@@ -98,7 +98,7 @@ def _require_langchain_core():
     except ImportError as e:  # pragma: no cover - exercised only without langchain
         raise ImportError(
             "ReplayCallbackHandler requires `langchain-core`. Install it with:\n"
-            '    pip install "replayai[langchain]"\n'
+            '    pip install "replayai-sdk[langchain]"\n'
             "or:\n"
             "    pip install langchain-core"
         ) from e

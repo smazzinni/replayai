@@ -9,7 +9,7 @@ import {
   type AgentSession,
 } from "@/lib/replay-data";
 import { useSession } from "@/hooks/use-api";
-import { ArrowRight, GitCompareArrows, Loader2, Minus, Plus } from "lucide-react";
+import { AlertTriangle, ArrowRight, GitCompareArrows, Loader2, Minus, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface DiffViewProps {
@@ -17,13 +17,34 @@ interface DiffViewProps {
 }
 
 export function DiffView({ sessions }: DiffViewProps) {
-  const [leftId, setLeftId] = useState(sessions[0]?.id ?? "");
-  const [rightId, setRightId] = useState(sessions[1]?.id ?? "");
+  const [leftId, setLeftId] = useState("");
+  const [rightId, setRightId] = useState("");
+  const [userTouched, setUserTouched] = useState(false);
+
+  // Auto-select defaults when sessions load asynchronously.
+  // Pick a failed session for A and a successful one for B (if available).
+  // Only runs on initial load (when IDs are empty) — never overrides a user choice.
+  if (!userTouched && sessions.length > 0) {
+    const leftValid = sessions.some((s) => s.id === leftId);
+    const rightValid = sessions.some((s) => s.id === rightId);
+    if (!leftValid || !rightValid) {
+      const failed = sessions.find((s) => s.status === "failed");
+      const newLeft = failed?.id ?? sessions[0].id;
+      const success = sessions.find((s) => s.id !== newLeft && s.status !== failed?.status);
+      const different = sessions.find((s) => s.id !== newLeft);
+      setLeftId(newLeft);
+      setRightId(success?.id ?? different?.id ?? sessions[0].id);
+    }
+  }
+
+  const handleLeftChange = (id: string) => { setUserTouched(true); setLeftId(id); };
+  const handleRightChange = (id: string) => { setUserTouched(true); setRightId(id); };
 
   const leftQ = useSession(leftId || null);
   const rightQ = useSession(rightId || null);
   const left = leftQ.data;
   const right = rightQ.data;
+  const sameSession = leftId === rightId && leftId !== "";
 
   const rows = useMemo(() => {
     if (!left || !right) return [];
@@ -44,18 +65,24 @@ export function DiffView({ sessions }: DiffViewProps) {
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <SessionPicker
             value={leftId}
-            onChange={setLeftId}
+            onChange={handleLeftChange}
             sessions={sessions}
             label="A (baseline)"
           />
           <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           <SessionPicker
             value={rightId}
-            onChange={setRightId}
+            onChange={handleRightChange}
             sessions={sessions}
             label="B (candidate)"
           />
         </div>
+        {sameSession && (
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+            <AlertTriangle className="h-3 w-3" />
+            Both pickers show the same session — diff will be identical.
+          </div>
+        )}
         {left && right && (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
             <span className="text-muted-foreground">

@@ -77,7 +77,7 @@ export async function flushSession(payload: FlushPayload): Promise<FlushResult> 
 
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "user-agent": `@replayai/sdk ts/0.4.1`,
+    "user-agent": `@smazzinni/sdk ts/0.4.1`,
   };
   if (cfg.token) headers.authorization = `Bearer ${cfg.token}`;
 

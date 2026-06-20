@@ -1,5 +1,5 @@
 {
-  "name": "@replayai/sdk",
+  "name": "@smazzinni/sdk",
   "version": "0.4.1",
   "description": "TypeScript SDK for ReplayAI — instrument JS/TS agents, record sessions, replay & export tests.",
   "license": "MIT",
@@ -46,5 +46,14 @@
     "testing",
     "llm",
     "tracing"
-  ]
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/smazzinni/replayai.git",
+    "directory": "sdks/typescript"
+  }
 }

@@ -46,7 +46,7 @@ export async function flushSession(payload) {
     const body = buildBody(payload);
     const headers = {
         "content-type": "application/json",
-        "user-agent": `@replayai/sdk ts/0.4.1`,
+        "user-agent": `@smazzinni/sdk ts/0.4.1`,
     };
     if (cfg.token)
         headers.authorization = `Bearer ${cfg.token}`;

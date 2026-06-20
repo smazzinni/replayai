@@ -1,4 +1,4 @@
-// @replayai/sdk — quickstart demo.
+// @smazzinni/sdk — quickstart demo.
 //
 // A self-contained runnable demo. Defines two fake agent helpers (no real
 // LLM — just canned data + a sleep), wraps the flow in `withTrace`, records
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
   // Point at the running ReplayAI app.
   configure({ apiUrl: "http://localhost:3000" });
 
-  console.log(`@replayai/sdk v${VERSION} — quickstart`);
+  console.log(`@smazzinni/sdk v${VERSION} — quickstart`);
   console.log(`Agent: demo-agent-ts`);
   console.log(`Project: support-agent`);
   console.log(`Message: "${MESSAGE}"`);

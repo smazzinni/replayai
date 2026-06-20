@@ -4,11 +4,11 @@ import { cn } from "@/lib/utils";
 import {
   fmtCost,
   fmtDuration,
-  fmtRelativeTime,
   type AgentSession,
   type SessionStatus,
 } from "@/lib/replay-data";
 import { useDeleteSession } from "@/hooks/use-api";
+import { RelativeTime } from "./relative-time";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -81,7 +81,9 @@ export function SessionsList({
 
   const handleDelete = (e: React.MouseEvent, s: AgentSession) => {
     e.stopPropagation();
-    if (!confirm(`Delete session "${s.name}"? This cannot be undone.`)) return;
+    const displayName = s.name.length > 60 ? s.name.slice(0, 60) + "…" : s.name;
+    if (!confirm(`Delete session "${displayName}"? This cannot be undone.`))
+      return;
     deleteSession.mutate(s.id, {
       onSuccess: () => toast.success("Session deleted"),
       onError: (err) =>
@@ -190,7 +192,7 @@ export function SessionsList({
                     <div className="mt-0.5 flex items-center gap-2 text-[10.5px] text-muted-foreground">
                       <span className="font-mono">{s.agent}</span>
                       <span className="opacity-40">·</span>
-                      <span>{fmtRelativeTime(s.startedAt)}</span>
+                      <RelativeTime iso={s.startedAt} />
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">

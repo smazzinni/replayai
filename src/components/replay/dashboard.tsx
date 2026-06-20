@@ -64,15 +64,21 @@ export function Dashboard() {
   const sessions = sessionsQ.data?.sessions ?? [];
   const selectedQ = useSession(selectedId);
 
-  // On first load, honor a ?s=<id> share link, else default to first failed.
+  // Auto-select a session when:
+  // 1. First load (selectedId is null) — honor ?s=<id> share link or pick first failed
+  // 2. Selected session was deleted or filtered out by project switch — pick a replacement
   // (adjust-state-during-render pattern — avoids setState-in-effect.)
-  if (selectedId === null && sessions.length > 0) {
-    const shared = searchParams.get("s");
-    const initial =
-      shared && sessions.some((s) => s.id === shared)
-        ? shared
-        : (sessions.find((s) => s.status === "failed")?.id ?? sessions[0].id);
-    setSelectedId(initial);
+  if (sessions.length > 0) {
+    const isSelectedValid =
+      selectedId !== null && sessions.some((s) => s.id === selectedId);
+    if (!isSelectedValid) {
+      const shared = searchParams.get("s");
+      const initial =
+        shared && sessions.some((s) => s.id === shared)
+          ? shared
+          : (sessions.find((s) => s.status === "failed")?.id ?? sessions[0].id);
+      setSelectedId(initial);
+    }
   }
 
   // Keep the URL in sync with the selected session (shareable).
@@ -194,6 +200,21 @@ export function Dashboard() {
               />
             </div>
             <div className="min-h-0">
+              {/* Mobile session picker — shown when sidebar is hidden */}
+              <div className="border-b border-border/60 p-3 md:hidden">
+                <select
+                  value={selectedId ?? ""}
+                  onChange={(e) => setSelectedId(e.target.value)}
+                  className="h-9 w-full rounded-md border border-border/60 bg-background/60 px-2.5 text-[12.5px] outline-none transition focus:border-primary/60"
+                >
+                  {sessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.status === "failed" ? "✗" : "✓"} {s.name} ·{" "}
+                      {s.agent}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {selectedId && selectedQ.data ? (
                 <ReplayTimeline
                   session={selectedQ.data}

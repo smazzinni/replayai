@@ -10,9 +10,7 @@ import { Features } from "@/components/landing/features";
 import { Footer } from "@/components/landing/footer";
 import { Header } from "@/components/landing/header";
 import { Hero } from "@/components/landing/hero";
-import { Pricing } from "@/components/landing/pricing";
 import { Problem } from "@/components/landing/problem";
-import { Roadmap } from "@/components/landing/roadmap";
 import { SectionHeading } from "@/components/landing/problem";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { MousePointerClick } from "lucide-react";
@@ -53,8 +51,6 @@ function Landing() {
         </section>
 
         <Features />
-        <Pricing />
-        <Roadmap />
 
         {/* Design partner program */}
         <section
@@ -64,7 +60,7 @@ function Landing() {
           <SectionHeading
             center
             eyebrow="Design partners"
-            title="Ship with us. Get free Pro for a year."
+            title="Partner with US"
             sub="We're onboarding 25 teams building production AI agents. Get white-glove setup, direct access to the founders, priority features, and 12 months of Pro — free."
           />
           <div className="mt-10">

@@ -24,8 +24,8 @@ export async function GET() {
     sessionCount,
     devMode: process.env.REPLAYAI_DEV === "1",
     install: {
-      python: "pip install replayai",
-      typescript: "npm install @replayai/sdk",
+      python: "pip install replayai-sdk",
+      typescript: "npm install @smazzinni/sdk",
       cli: "curl -fsSL https://replayai.dev/install | sh",
     },
   });

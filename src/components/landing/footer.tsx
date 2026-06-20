@@ -19,8 +19,6 @@ const COLUMNS: Column[] = [
     links: [
       { label: "Demo", href: "/#demo" },
       { label: "Features", href: "/#features" },
-      { label: "Pricing", href: "/#pricing" },
-      { label: "Roadmap", href: "/#roadmap" },
       { label: "Setup", href: "/?view=setup" },
     ],
   },
@@ -105,7 +103,7 @@ export function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-border/50 pt-6 sm:flex-row">
-          <p className="text-[11.5px] text-muted-foreground">
+          <p className="text-[11.5px] text-muted-foreground" suppressHydrationWarning>
             © {new Date().getFullYear()} ReplayAI, Inc. Built for engineers
             tired of guessing.
           </p>

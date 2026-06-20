@@ -19,11 +19,15 @@ interface ExportViewProps {
 }
 
 export function ExportView({ sessions }: ExportViewProps) {
-  const failed = sessions.find((s) => s.status === "failed");
-  const [sessionId, setSessionId] = useState(
-    failed?.id ?? sessions[0]?.id ?? "",
-  );
+  const [sessionId, setSessionId] = useState("");
   const [lang, setLang] = useState<ExportLang>("pytest");
+
+  // Auto-select a default session when sessions load asynchronously.
+  // Prefer a failed session (those are the ones you usually export as tests).
+  if (sessions.length > 0 && !sessions.some((s) => s.id === sessionId)) {
+    const failed = sessions.find((s) => s.status === "failed");
+    setSessionId(failed?.id ?? sessions[0].id);
+  }
 
   const q = useSession(sessionId || null);
   const session = q.data;

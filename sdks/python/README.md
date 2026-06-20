@@ -4,16 +4,16 @@ Instrument Python agents, record every step (LLM calls, tool calls, retrievals, 
 and POST sessions to the ReplayAI dashboard where you can replay them, diff runs, and
 export tests.
 
-- **Stdlib only** — `pip install replayai` brings no dependencies.
+- **Stdlib only** — `pip install replayai-sdk` brings no dependencies.
 - **Decorator + context manager** — `@trace(...)` or `with trace(...) as ctx:`.
-- **Framework extras** — `pip install "replayai[langchain]"` for auto-instrumentation.
+- **Framework extras** — `pip install "replayai-sdk[langchain]"` for auto-instrumentation.
 
 ## Install
 
 ```bash
-pip install replayai
+pip install replayai-sdk
 # or, with the LangChain integration:
-pip install "replayai[langchain]"
+pip install "replayai-sdk[langchain]"
 ```
 
 ## 30-second usage

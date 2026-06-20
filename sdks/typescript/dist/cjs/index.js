@@ -27,7 +27,7 @@ Object.defineProperty(exports, "redactOptional", { enumerable: true, get: functi
 /** SDK version. */
 exports.VERSION = "0.4.1";
 // Default export is a namespace object — handy for CJS consumers and as a
-// single `import replayai from "@replayai/sdk"` import.
+// single `import replayai from "@smazzinni/sdk"` import.
 const replayai = {
     VERSION: exports.VERSION,
     trace: context_js_1.trace,

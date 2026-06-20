@@ -97,8 +97,12 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
     setPlaying(false);
   };
 
-  // build proportional segment widths from durations
-  const totalDur = session.steps.reduce((a, s) => a + s.durationMs, 0) || 1;
+  // Build segment widths. When steps have real durations, segments are
+  // proportional. When all durations are 0 (SDK-recorded sessions),
+  // fall back to equal widths so the bar isn't 90% empty.
+  const totalDur = session.steps.reduce((a, s) => a + s.durationMs, 0);
+  const hasDurations = totalDur > 0;
+  const equalWidth = total > 0 ? 100 / total : 100;
 
   if (isLoading || total === 0) {
     return (
@@ -197,7 +201,9 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
           <div className="flex h-9 w-full gap-px overflow-hidden rounded-md border border-border/60 bg-background/40 p-px">
             {session.steps.map((s, i) => {
               const meta = STEP_META[s.type];
-              const w = Math.max(2, (s.durationMs / totalDur) * 100);
+              const w = hasDurations
+                ? Math.max(2, (s.durationMs / totalDur) * 100)
+                : equalWidth;
               const isActive = i === index;
               const isPast = i < index;
               return (
@@ -264,7 +270,9 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
           <button
             onClick={() => {
               if (index >= total - 1) {
-                restart();
+                // At the end — restart from beginning and auto-play
+                setIndex(0);
+                setPlaying(true);
                 return;
               }
               setPlaying((p) => !p);
@@ -305,7 +313,7 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
               {replayLlm ? "Live LLM" : "Mocked LLM"}
             </button>
             <span className="hidden text-[10.5px] text-muted-foreground sm:inline">
-              {replayLlm ? "~$" + (session.costUsd * 1).toFixed(3) + "/run" : "$0.000/run"}
+              {replayLlm ? `~$${session.costUsd.toFixed(3)}/run` : "$0.000/run"}
             </span>
           </div>
         </div>
@@ -314,16 +322,18 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
       {/* Step detail */}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={step?.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="p-4"
-          >
-            <StepDetail step={step!} replayLlm={replayLlm} />
-          </motion.div>
+          {step && (
+            <motion.div
+              key={step.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="p-4"
+            >
+              <StepDetail step={step} replayLlm={replayLlm} />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </div>

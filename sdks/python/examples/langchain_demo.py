@@ -13,7 +13,7 @@ Run with:
     python3 sdks/python/examples/langchain_demo.py
 
 To install langchain for the full demo:
-    pip install "replayai[langchain]" langchain-openai
+    pip install "replayai-sdk[langchain]" langchain-openai
 """
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def main() -> int:
     if not _langchain_available():
         print(
             "ReplayCallbackHandler not exercised — langchain-core is not installed.\n"
-            'Install with: pip install "replayai[langchain]"'
+            'Install with: pip install "replayai-sdk[langchain]"'
         )
         return 0
 

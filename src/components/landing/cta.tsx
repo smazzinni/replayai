@@ -5,9 +5,9 @@ import { ArrowRight, Github, Terminal } from "lucide-react";
 import { CodeBlock } from "@/components/replay/code-block";
 
 const INSTALL = `# 1. Install the SDK
-pip install replayai
+pip install replayai-sdk
 # or
-npm install @replayai/sdk
+npm install @smazzinni/sdk
 
 # 2. Wrap your agent — that's it
 replayai trace ./agent.py

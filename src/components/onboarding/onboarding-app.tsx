@@ -300,11 +300,11 @@ def run(message: str) -> str:
                           {t.scope}
                         </span>
                       </div>
-                      <div className="mt-0.5 text-[10.5px] text-muted-foreground">
+                      <div className="mt-0.5 text-[10.5px] text-muted-foreground" suppressHydrationWarning>
                         {t.name} · created{" "}
-                        {new Date(t.createdAt).toLocaleDateString()}
+                        {new Date(t.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                         {t.lastUsedAt &&
-                          ` · last used ${new Date(t.lastUsedAt).toLocaleDateString()}`}
+                          ` · last used ${new Date(t.lastUsedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`}
                       </div>
                     </div>
                     <button

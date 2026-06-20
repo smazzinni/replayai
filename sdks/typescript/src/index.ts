@@ -63,7 +63,7 @@ export type {
 };
 
 // Default export is a namespace object — handy for CJS consumers and as a
-// single `import replayai from "@replayai/sdk"` import.
+// single `import replayai from "@smazzinni/sdk"` import.
 const replayai = {
   VERSION,
   trace,
