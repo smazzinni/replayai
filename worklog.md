@@ -230,3 +230,176 @@ Stage Summary:
 - Verified via curl (server unstable under browser load in this sandbox, but all APIs return correct responses): token create returns `rai_live_...`, onboarding shows hasToken/hasSession/17 sessions/devMode, connection test returns connected:true, waitlist join returns "You're #2 in line", waitlist list shows both entries persisted.
 - Python SDK demo run live: recorded `demo-agent` (5 steps, failed). TS SDK demo run live: recorded `demo-agent-ts` (4 steps, success) + ReplaySession.run() loaded it + export("pytest") generated 1263-char test.
 - Lint clean. Dev server stability note: the Turbopack dev server gets OOM-killed under rapid browser request bursts in this sandbox; all functionality is verified via curl + the SDK demos which complete single-request flows successfully.
+
+---
+Task ID: py-fix-v6
+Agent: sub-agent (general-purpose)
+Task: Fix Python SDK all P0-P2 — error handling, retry, structured exceptions, flexible mocks, redaction improvements, subprocess helper.
+
+Work Log:
+- **config.py** — Added `timeout: float = 30.0` (env `REPLAYAI_TIMEOUT`), `max_steps: int = 200` (env `REPLAYAI_MAX_STEPS`), `always_record_failures: bool = True` (env `REPLAYAI_ALWAYS_RECORD_FAILURES`). Updated `DEFAULT_REDACT_PATTERNS`: OpenAI regex now `sk-(?:proj|svcacct|admin)?-?[a-zA-Z0-9]{20,}` (covers sk-proj-, sk-svcacct-, sk-admin- prefixes). Documented intentional removal of the overly-broad `[A-Z0-9]{28,}` heuristic. Changed `dashboard_url` default from `http://localhost:7373` → `http://localhost:3000`. Updated `_load_from_env`, `configure`, and `to_dict` to round-trip the new fields.
+- **store.py** — Full rewrite of the HTTP layer:
+  - `_do_request()` now raises `StoreError` on EVERY failure path (HTTP, network, JSON parse). No more `{}` returns from `_do_request` itself — empty body returns `{}` only when the HTTP response was actually empty.
+  - Retry with exponential backoff: 3 attempts, base 1s, max 10s, ±25% jitter via `_backoff_delay()`. Retries on HTTP 5xx / 429 and `URLError`/`OSError`. 4xx (non-429) raises immediately.
+  - Configurable timeout via `Config.timeout` (was hard-coded 15s).
+  - Payload-size guard: `_build_payload()` applies `max_steps` ceiling, then if the serialized JSON > 5 MB it keeps first 50 + last 50 + every error step (deduped, re-sorted by `offsetMs`). Sets `truncated: true` flag and emits a stderr warning.
+  - Module-level `_opener` via `build_opener(_KeepAliveHTTPHandler())`. Custom handler injects `Connection: keep-alive` so HTTP/1.1 servers can reuse the socket for the duration of a response.
+  - `flush_session()` is the only public entry point that swallows `StoreError` (in non-strict mode) and returns `{}` — preserving the documented non-strict contract.
+  - `export_session()` also gained retry/backoff (it bypasses `_do_request` because it returns raw text, not JSON).
+  - Bumped User-Agent to `replayai-python/0.6.0`.
+  - All public signatures (`flush_session`, `get_session`, `get_session_list`, `export_session`, `dashboard_url_for`) unchanged.
+- **context.py** —
+  - Replaced manual `__name__`/`__doc__`/`__wrapped__` copying with `@functools.wraps(fn)` on both the sync and async decorator wrappers (preserves `__module__`, `__qualname__`, `__dict__`, `__wrapped__`).
+  - Structured exception capture: added `_capture_exception(exc_type, exc, tb)` returning `{exception_type, message, frames:[{file,line,function,code}], raw_traceback, extraction_failed:bool}`. Frame extraction is wrapped in try/except; falls back to empty `frames` + `raw_traceback` string with `extraction_failed=True`. Error step now stores `json.dumps(exception_data)` in `output` (was raw traceback string).
+  - Sampling logic now honors `Config.always_record_failures`: when a session is sampled out, it's still flushed if status=="failed" AND `always_record_failures` is True. Setting `always_record_failures=False` restores pre-v0.6 behavior.
+- **steps.py** — `record_step()` outside an active trace now emits a stderr warning (with the step name) instead of silently dropping. Strict mode still raises `RuntimeError`.
+- **session.py** —
+  - Renamed `run()` → `load()`. `load()` accepts but ignores `agent`/`framework` kwargs (DeprecationWarning). `run()` retained as a deprecated alias (emits DeprecationWarning, forwards to `load()`).
+  - Flexible mock matching: `mock()` now accepts `is_regex`, `is_prefix`, `input_contains`, `input` kwargs. All supplied criteria combine via AND. Pre-compiles regex once for efficiency. First matching mock wins per step. Emits stderr warning for any registered mock that matched zero steps.
+  - New `compare(agent_callable, inputs=None)` method: runs the callable inside a fresh `trace()` context, applies mocks to both the loaded and live step lists, returns `{matches, step_count_loaded, step_count_live, divergences:[{step, field:"output", loaded, live}]}`. The comparison trace is NOT flushed to the API (it's a local diff).
+- **redact.py** — Full rewrite:
+  - Replaced `[REDACTED]` constant with `[REDACTED:<sha256[:8]>]` markers — consistent per secret value (same secret → same hash).
+  - Added entropy-based detection: Shannon entropy > 4.5 + length > 20 → redact. Token candidate regex is `[A-Za-z0-9_\-/+=]{20,}`.
+  - Whitelist patterns (never entropy-redacted): UUIDs, ISO timestamps, URLs, snake_case identifiers (must have ≥1 underscore, lowercase only).
+  - `REDACT_STRICT` env var: when set to `false`/`0`/`no`/`off`, entropy detection is disabled entirely (regex patterns still apply). Default is enabled.
+  - All redaction paths (regex + entropy) wrapped in defensive try/except so a malformed pattern never crashes recording.
+- **subprocess_helper.py** (NEW) — Three public functions for propagating session state across process boundaries (the `contextvars` ContextVar does NOT cross `multiprocessing` / `ProcessPoolExecutor`):
+  - `get_session_data()` — snapshot the current session as a picklable dict (internal keys stripped).
+  - `set_session_data(session_dict)` — install the dict as the current session in this process; returns the synthetic TraceContext (or None).
+  - `session_context(session_dict)` — context manager that sets on enter, restores on exit.
+- **__init__.py** — Bumped `__version__` to `"0.6.0"`. Added `get_session_data`, `set_session_data`, `session_context` to `__all__` and imported them from `subprocess_helper`.
+- **pyproject.toml** — Bumped version to `0.6.0`.
+
+Verification:
+- `python3 -c "import replayai; print(replayai.__version__)"` → `0.6.0` ✓
+- Built both wheel and sdist: `dist/replayai_sdk-0.6.0-py3-none-any.whl` (34 KB), `dist/replayai_sdk-0.6.0.tar.gz` (30 KB). Wheel installs cleanly in a fresh user install; `replayai.__version__ == 0.6.0` and all 23 exports resolve.
+- Functional sanity checks (all passed):
+  1. Config fields present (timeout=30, max_steps=200, always_record_failures=True, dashboard_url=http://localhost:3000).
+  2. Env var overrides (REPLAYAI_TIMEOUT, REPLAYAI_MAX_STEPS, REPLAYAI_ALWAYS_RECORD_FAILURES) load correctly.
+  3. `_do_request` raises `StoreError` on JSON parse errors.
+  4. Retry: 3 attempts on HTTP 503; immediate raise on HTTP 404; 2 attempts on HTTP 429 (recovered).
+  5. max_steps ceiling: 20 steps → 5 with stderr warning.
+  6. 5 MB payload truncation: 2000 steps + 2 error steps → 102 steps (50 head + 50 tail + 2 errors, deduped), payload under 5 MB, `truncated: true` flag set.
+  7. Redaction: OpenAI keys (sk-, sk-proj-, sk-svcacct-) all redacted; same value → same `[REDACTED:<hash>]` marker; UUID/ISO/URL/snake_case whitelisted; entropy detector catches opaque tokens; `REDACT_STRICT=false` disables entropy only.
+  8. Sampling: sample_rate=0 + failure → recorded (always_record_failures=True); sample_rate=0 + success → dropped; sample_rate=0 + failure + always_record_failures=False → dropped.
+  9. Structured exception capture: error step `output` is JSON with `exception_type`, `message`, `frames` (file/line/function/code), `raw_traceback`, `extraction_failed: false`.
+  10. `@functools.wraps` preserves `__name__`, `__doc__`, `__wrapped__` on decorated functions.
+  11. `record_step()` outside trace → stderr warning with step name; strict mode → RuntimeError.
+  12. `ReplaySession.run(agent=..., framework=...)` → DeprecationWarning × 2.
+  13. `ReplaySession.compare()` returns `{matches, step_count_loaded, step_count_live, divergences}` with correct divergence entries.
+  14. Flexible mock matching: prefix, regex, input_contains all work; unused mocks warn.
+  15. Subprocess helpers: `session_context` restores the previous session on exit; `get_session_data`/`set_session_data` round-trip across "process" boundary.
+  16. `replayai.strict_mode = True/False` property proxy still works.
+  17. LangChain integration and CLI modules still import cleanly.
+
+Constraints honored:
+- Stdlib only — no new runtime dependencies (still 0 deps).
+- All public function signatures preserved (added params are keyword-only with defaults).
+- Backward-compat: `run()` retained as deprecated alias; `agent`/`framework` params still accepted.
+
+Files changed:
+- /home/z/my-project/sdks/python/replayai/config.py
+- /home/z/my-project/sdks/python/replayai/store.py (rewritten)
+- /home/z/my-project/sdks/python/replayai/context.py
+- /home/z/my-project/sdks/python/replayai/steps.py
+- /home/z/my-project/sdks/python/replayai/session.py (rewritten)
+- /home/z/my-project/sdks/python/replayai/redact.py (rewritten)
+- /home/z/my-project/sdks/python/replayai/subprocess_helper.py (NEW)
+- /home/z/my-project/sdks/python/replayai/__init__.py
+- /home/z/my-project/sdks/python/pyproject.toml
+
+Next actions:
+- Consider adding pytest unit tests under `sdks/python/tests/` to lock in the new behavior (retry, truncation, sampling, redaction).
+- Dashboard backend (`/api/sessions` ingest) may want to render the new structured `output` JSON for error steps (frames list) — currently it expects a string.
+- Document `REDACT_STRICT`, `REPLAYAI_TIMEOUT`, `REPLAYAI_MAX_STEPS`, `REPLAYAI_ALWAYS_RECORD_FAILURES` env vars in the README.
+
+---
+Task ID: ts-fix-v6
+Agent: ts-sdk-fix subagent
+Task: Fix ALL P0–P2 issues in the ReplayAI TypeScript SDK (store/context/session/redact/config/types/index/package.json). Zero runtime deps, Node 18+ built-ins only.
+
+Work Log:
+- Read existing SDK (src/{store,context,session,redact,config,types,index,steps,cost}.ts) + tsconfig + package.json + worklog for context. Baseline build (`bun run build`) clean; VERSION was 0.4.3.
+
+types.ts:
+- Added `MockMatchOptions` (`isPrefix`, `isRegex`, `inputContains`, `inputSample`) and `MockEntry` (`pattern`, `response`, `options`, `regex?`, `matched?`).
+- Added `CompareDivergence` (`{step, field, loaded, live}`) and `CompareResult` (`{matches, stepCountLoaded, stepCountLive, divergences[]}`).
+- Added `StackFrame` (`{file?, line?, column?, function?}`) and `CapturedException` (`{name, message, stackFrames, rawStack, extractionFailed}`) for structured exception capture.
+- Added `LastFlushResult` (structural duplicate of store's `FlushResult`) to avoid a circular type import; added `__flushResult?: LastFlushResult` + `__sampled?: boolean` to `InternalSession` so consumers can read the flush result after `withTrace` returns.
+- Extended `ConfigOptions` with `timeoutMs?`, `maxSteps?`, `redactStrict?`.
+
+config.ts:
+- Updated OpenAI regex to `/sk-(?:proj|svcacct|admin)?-?[a-zA-Z0-9]{20,}/g` (covers legacy + project + service-account + admin prefixes).
+- Did NOT add the broad `[A-Z0-9]{28,}` pattern (per spec).
+- Added `timeoutMs` (env `REPLAYAI_TIMEOUT`, default 30000), `maxSteps` (env `REPLAYAI_MAX_STEPS`, default 200), `redactStrict` (env `REPLAYAI_REDACT_STRICT`, default true) to `ResolvedConfig` + `resolveConfig()`. All three honor programmatic overrides first, then env, then default.
+- `dashboardUrl` default kept as `http://localhost:3000`.
+
+store.ts (full rewrite):
+- Removed `lastFlushResult` module-level state, `getLastFlushResult()`, `_resetLastFlushResult()` (per spec — callers get the result from the `flushSession` return value).
+- Added `AbortController`-based timeout per request (default 30s, configurable via `REPLAYAI_TIMEOUT` or `configure({timeoutMs})`). Aborts the fetch on timeout (raises `AbortError` → retryable).
+- Added retry with exponential backoff: 3 attempts, base 1s, max 10s, on 5xx + network/abort errors. 4xx errors return failure immediately (non-retryable). Same retry logic applied to `fetchSession()` and `fetchExport()`.
+- Added in-memory retry queue (max 100 items): if flush fails after all retries, payload is pushed to queue. Queue is drained (best-effort) before every new flush — older failures get priority. Warning logged when queue is full and a payload is dropped.
+- Added payload-size check: `maybeTruncate()` enforces both `cfg.maxSteps` (default 200) and a hard 5 MB byte budget. Truncation keeps first 50 + last 50 + all `failed`-status steps (de-duped by id/name+offset). If still over 5 MB, the head/tail window is halved until under or only error steps remain. Sets `truncated: true` on the returned `FlushResult` and logs a warning.
+- `flushSession()`, `fetchSession()`, `fetchExport()` signatures preserved (return types unchanged). Added `_queueLength()`, `_clearQueue()`, `newLocalSessionId()` test helpers. `user-agent` now uses a local `SDK_VERSION = "0.6.0"` constant (avoided circular `import {VERSION} from "./index.js"`).
+
+context.ts (full rewrite):
+- `withTrace()` now ALWAYS enters `AsyncLocalStorage.run()` even when not sampled — `startSession()` takes a `sampled` flag stored as `session.__sampled`. recordStep() always has a session to attach to. Only the API POST is gated by sampling. Errors ALWAYS flush (even when not sampled).
+- Exported `isSampled()` — returns true iff the current context's session is sampled.
+- `appendStep()` now warns `"[replayai] recordStep() called outside of an active trace — step was not recorded"` and returns when no session is active (covers both `recordStep` and `recordStepSync` since they both call `appendStep`).
+- Added `parseStackTrace(stack)` — V8-format parser returning `StackFrame[]` (handles `at func (file:line:col)` and `at file:line:col`). Wrapped in try/catch by `captureException()` which sets `extractionFailed: true` on throw.
+- Structured exception capture: on error inside `withTrace()`, builds a `CapturedException` (`{name, message, stackFrames, rawStack, extractionFailed}`) and pushes a step with `type: "error"`, `name: err.name`, `input: err.message`, `output: JSON.stringify(exceptionData)` BEFORE flushing.
+- `endAndFlush()` now returns the `FlushResult` and stashes it on `session.__flushResult` (via `.then`) so consumers that captured the session via `currentSession()` inside `withTrace` can read the URL/error after `withTrace` returns. This replaces the removed `getLastFlushResult()` API.
+
+session.ts (full rewrite):
+- Renamed `run()` → `load()`. `load(opts?)` accepts `RunOptions` for backward compat but emits a deprecation warning if `agent`/`framework` are supplied (the recorded session's values always win).
+- `run(opts?)` kept as a deprecated alias: emits `"[replayai] run() is deprecated, use load()"` then delegates to `load(opts)`.
+- `mocks` field upgraded from `Record<string, string>` to `MockEntry[]`. `mock(fnName, response, options?)` accepts `MockMatchOptions`:
+  - Exact (default): `mock("tool_name", response)`
+  - Prefix: `mock("search", response, { isPrefix: true })` — name starts with
+  - Regex: `mock("search_web.*", response, { isRegex: true })` — compiled to `RegExp`; falls back to literal on invalid pattern (with warning)
+  - Input-contains: `mock("tool", response, { inputContains: "NYC" })` — case-insensitive substring of `step.input`
+  - Input-exact: `mock("tool", response, { inputSample: "expected" })` — case-insensitive equality on first 100 chars of `step.input`
+  - Combine: multiple flags AND together
+- `findMatchingMock(step)` iterates mocks, applies name + input filters, marks the mock `matched=true` on hit. `warnUnmatchedMocks()` emits a warning for every registered mock that matched zero steps during `load()` or `compare()`.
+- Added `compare(agentFn, inputs?)`: loads the trace (auto-calls `load()` if not cached), runs `agentFn(inputs)` inside a `withTrace({sampleRate: 0})` context (never flushes the compare run), captures the live session via `currentSession()`, applies mocks to both loaded and live steps, then walks `max(loaded, live)` steps comparing `name`/`type`/`status`/`output` fields. Returns `CompareResult` with `matches` (zero divergences), `stepCountLoaded`, `stepCountLive`, `divergences[]`.
+
+redact.ts (full rewrite):
+- Updated OpenAI regex in `DEFAULT_REDACT_PATTERNS` (mirrors config.ts).
+- Replaced `[REDACTED]` constant marker with `[REDACTED:<sha256[:8]>]` — `redactMarker(secret)` hashes the secret with `node:crypto`'s `createHash('sha256')` and returns the first 8 hex chars. Cached per-secret value so the same key redacts to the same marker across the process (lets you spot the same secret across steps without leaking it). `REDACTED` legacy constant kept for back-compat (returns the literal `"[REDACTED]"`).
+- Added `shannonEntropy(s)` (Shannon base-2 entropy in bits/symbol).
+- Added entropy-based detection: candidate substrings matched via `/[A-Za-z0-9+/=_-]{20,}/g`; for each candidate, whitelist is checked first (UUID, ISO 8601 timestamp, URL, snake_case, kebab-case) — whitelisted tokens pass through; otherwise entropy is computed and the token is redacted if `> 4.5`. Disabled when `REPLAYAI_REDACT_STRICT=false` or `configure({redactStrict: false})`.
+- All regex replacements now use the hash-based marker via a replacer function: `text.replace(re, (m) => redactMarker(m))`.
+- Entropy detection wrapped in try/catch so it can never break recording.
+
+index.ts:
+- Bumped `VERSION` to `"0.6.0"`.
+- Added `isSampled` and `redactMarker` to both the named exports and the default-namespace object.
+- Added type re-exports: `CapturedException`, `CompareDivergence`, `CompareResult`, `LastFlushResult`, `MockEntry`, `MockMatchOptions`, `StackFrame`.
+- Removed `getLastFlushResult` from exports (gone from store.ts).
+
+package.json:
+- Bumped `version` to `0.6.0`.
+
+examples/quickstart.ts:
+- Replaced `getLastFlushResult()` with the new pattern: capture `currentSession()` inside `withTrace`, then read `session.__flushResult` after `withTrace` returns.
+- Switched the demo's `replay.run({agent, framework})` call to `replay.load()` (no args).
+
+Verification:
+- `cd /home/z/my-project/sdks/typescript && bun run build` — clean (tsc -p esm + tsc -p cjs + dist/cjs/package.json emit).
+- `node -e "console.log(require('./dist/cjs/index.js').VERSION)"` → `0.6.0` ✓
+- ESM import smoke test (`node --input-type=module`) → all exports present, `redactText('sk-proj-...')` → `[REDACTED:f843c013]` ✓
+- Redaction: OpenAI key (legacy + sk-proj- prefix) → redacted; same secret → same marker (sha256 consistency); UUID/ISO timestamp/URL/snake_case/kebab-case → NOT redacted (whitelist); 46-char base64 token (entropy 4.68) → redacted; snake_case (entropy 3.76) → not redacted ✓
+- `REPLAYAI_REDACT_STRICT=false` → entropy token NOT redacted; flipping back to true → redacted ✓
+- Context: `isSampled()` outside trace → false; inside `withTrace({sampleRate:0})` → false BUT session IS active (always enters ALS); inside `withTrace({sampleRate:1})` → true ✓
+- recordStep outside trace → console.warn fires with the exact spec message ✓
+- `parseStackTrace(err.stack)` → parses V8 frames into `{function, file, line, column}` ✓
+- Exception path: `withTrace` re-throws user error AND flushes (even at sampleRate:0) with structured error step appended ✓
+- Mock matching: exact / prefix / regex / inputContains / inputSample all register correctly; `run()` emits deprecation warning and calls `load()` ✓
+- Queue + retry: 3 attempts with exponential backoff (1s, 2s) on unreachable server, then payload queued; `_queueLength()` reflects queued count; `_clearQueue()` works ✓
+- Truncation: 502-step payload → 100 steps kept (first 50 + last 50, errors deduped into the tail window); `truncated: true` on result ✓
+- AbortController timeout: against a 60s-hanging server with `REPLAYAI_TIMEOUT=200`, total elapsed = 3.6s (3 attempts × 200ms + 1s + 2s backoffs); error = "This operation was aborted" ✓
+- Quickstart runs end-to-end (records + flushes; fails on 401 from the now-token-gated API but exits cleanly with the new `__flushResult` pattern) ✓
+
+Stage Summary:
+- All 8 files modified per spec. Zero runtime dependencies added (only `node:crypto`, `node:async_hooks`, both already in use). Backward compatibility preserved: `run()` still works (deprecated), `mock(name, response)` still works (options optional).
+- Build is green for both ESM (`dist/`) and CJS (`dist/cjs/`). VERSION reports `0.6.0`. All P0–P2 issues addressed: AbortController timeout, retry+backoff, in-memory queue, payload size check, always-enter-ALS, isSampled export, recordStep-outside-session warning, structured exception capture with parseStackTrace, run()→load() deprecation, compare() with divergences, flexible mock matching (prefix/regex/inputContains/inputSample), entropy-based redaction with whitelist + sha256 markers, REPLAYAI_REDACT_STRICT toggle, config additions (timeoutMs/maxSteps/redactStrict).

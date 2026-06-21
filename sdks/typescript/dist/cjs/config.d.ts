@@ -12,6 +12,12 @@ export interface ResolvedConfig {
     sampleRate: number;
     strict: boolean;
     redactPatterns: RegExp[];
+    /** Per-request timeout in ms. Default 30000. */
+    timeoutMs: number;
+    /** Max steps retained per session before truncation. Default 200. */
+    maxSteps: number;
+    /** When false, entropy-based redaction is disabled. Default true. */
+    redactStrict: boolean;
 }
 /** Resolve the active config from env vars + programmatic overrides. */
 export declare function resolveConfig(): ResolvedConfig;

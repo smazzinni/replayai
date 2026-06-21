@@ -20,8 +20,9 @@ from .redact import redact_text
 from .session import ReplaySession
 from .steps import arecord_step, record_step
 from .store import StoreError, dashboard_url_for, flush_session
+from .subprocess_helper import get_session_data, session_context, set_session_data
 
-__version__ = "0.4.3"
+__version__ = "0.6.0"
 
 __all__ = [
     "__version__",
@@ -49,6 +50,10 @@ __all__ = [
     "flush_session",
     "dashboard_url_for",
     "StoreError",
+    # Subprocess propagation
+    "get_session_data",
+    "set_session_data",
+    "session_context",
 ]
 
 

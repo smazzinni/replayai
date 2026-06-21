@@ -13,7 +13,7 @@ import {
   withTrace,
   recordStep,
   configure,
-  getLastFlushResult,
+  currentSession,
   ReplaySession,
   VERSION,
 } from "../src/index.js";
@@ -107,10 +107,14 @@ async function main(): Promise<void> {
   console.log("");
 
   let finalReply = "";
+  // Capture the session via currentSession() inside the trace; after
+  // withTrace returns, the flush result is stashed on session.__flushResult.
+  let session: ReturnType<typeof currentSession> = undefined;
   await withTrace(
     "demo-agent-ts",
     { project: "support-agent", tags: ["sdk-demo"], framework: "Custom" },
     async () => {
+      session = currentSession();
       const intent = await classifyIntent(MESSAGE);
       const customer = await lookupCustomer(MESSAGE);
       await issueRefund(customer.customerId, 19);
@@ -121,7 +125,7 @@ async function main(): Promise<void> {
   console.log("");
   console.log(`Agent reply: ${finalReply}`);
 
-  const flush = getLastFlushResult();
+  const flush = session?.__flushResult;
   if (flush?.ok && flush.url) {
     console.log("");
     console.log(`✓ Session recorded.`);
@@ -131,8 +135,8 @@ async function main(): Promise<void> {
 
     // Bonus: round-trip through ReplaySession to prove the SDK can also read.
     const replay = new ReplaySession(flush.sessionId);
-    const trace = await replay.run({ agent: "demo-agent-ts", framework: "Custom" });
-    console.log(`✓ ReplaySession.run() loaded ${trace.stepCount} steps (status: ${trace.status}).`);
+    const trace = await replay.load();
+    console.log(`✓ ReplaySession.load() loaded ${trace.stepCount} steps (status: ${trace.status}).`);
 
     const code = await replay.export("pytest");
     const preview = code.split("\n").slice(0, 4).join("\n");

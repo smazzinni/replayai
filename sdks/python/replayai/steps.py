@@ -8,6 +8,7 @@ can be interleaved with async agent code without blocking the event loop.
 from __future__ import annotations
 
 import asyncio
+import sys
 from typing import Any
 
 from .context import TraceContext, _append_step, current_session
@@ -33,13 +34,21 @@ def record_step(**step: Any) -> None:
     """
     ctx = current_session()
     if ctx is None or ctx.session is None:
-        # No active trace — silently drop unless strict.
+        # No active trace — emit a warning (one per call) unless strict,
+        # in which case we raise so the caller knows immediately.
         from . import config as _config
 
+        name = step.get("name", "<unnamed>")
         if _config.strict_mode:
             raise RuntimeError(
-                "record_step() called outside of an active trace() context."
+                "record_step() called outside of an active trace() context "
+                f"(step name={name!r})."
             )
+        print(
+            f"[replayai] warning: record_step(name={name!r}) called outside of an "
+            "active trace() context — step dropped.",
+            file=sys.stderr,
+        )
         return
     _append_step(ctx.session, step)
 

@@ -2,7 +2,8 @@
 // Reads env vars on first access; `configure()` overrides programmatically.
 /** Default redaction patterns. Applied to every step's input/output. */
 export const DEFAULT_REDACT_PATTERNS = [
-    /sk-[a-zA-Z0-9]{20,}/g, // OpenAI-style API keys
+    // OpenAI-style API keys (legacy + project + service-account + admin prefixes).
+    /sk-(?:proj|svcacct|admin)?-?[a-zA-Z0-9]{20,}/g,
     /Bearer\s+[a-zA-Z0-9._\-]+/g, // Authorization header tokens
     /password=[^\s&]+/gi, // password=... in URLs / form bodies
     /["']?api[_-]?key["']?\s*[:=]\s*["']?[a-zA-Z0-9]{20,}/gi, // api_key=...
@@ -75,6 +76,9 @@ export function resolveConfig() {
         sampleRate: overrides.sampleRate ?? envNumber("REPLAYAI_SAMPLE_RATE", 1.0),
         strict: overrides.strict ?? envBool("REPLAYAI_STRICT", false),
         redactPatterns: redactPatterns ?? [...DEFAULT_REDACT_PATTERNS],
+        timeoutMs: overrides.timeoutMs ?? envNumber("REPLAYAI_TIMEOUT", 30000),
+        maxSteps: overrides.maxSteps ?? envNumber("REPLAYAI_MAX_STEPS", 200),
+        redactStrict: overrides.redactStrict ?? envBool("REPLAYAI_REDACT_STRICT", true),
     };
     return cached;
 }

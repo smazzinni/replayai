@@ -1,6 +1,10 @@
 // ReplayAI TypeScript SDK — context.
 // AsyncLocalStorage-based current-session tracking. `withTrace()` is the
 // context manager; `trace()` is the higher-order wrapper.
+//
+// Always enters the AsyncLocalStorage run — even when not sampled — so that
+// recordStep() can still attach steps to a (non-flushed) session. The sampler
+// only gates the POST to the API (errors always flush).
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { getConfig } from "./config.js";
@@ -10,6 +14,11 @@ const storage = new AsyncLocalStorage();
 /** Return the innermost active recording session, if any. */
 export function currentSession() {
     return storage.getStore();
+}
+/** True iff the current context is sampled (will be flushed to the API). */
+export function isSampled() {
+    const s = storage.getStore();
+    return !!s?.__sampled;
 }
 function nowMs() {
     return Date.now();
@@ -21,7 +30,7 @@ function shouldSample(rate) {
         return false;
     return Math.random() < rate;
 }
-function startSession(name, opts) {
+function startSession(name, opts, sampled) {
     const cfg = getConfig();
     const startedAt = opts?.startedAt ?? new Date();
     return {
@@ -33,15 +42,19 @@ function startSession(name, opts) {
         tags: opts?.tags ? [...opts.tags] : [],
         startedAt,
         __startMs: startedAt.getTime(),
+        __sampled: sampled,
         steps: [],
         status: "running",
     };
 }
-/** Append a normalized step to the current session. No-op if no session. */
+/** Append a normalized step to the current session. Warns (no-op) if no
+ *  session is active so users learn to wrap their code in `withTrace()`. */
 export function appendStep(step) {
     const s = currentSession();
-    if (!s)
+    if (!s) {
+        console.warn("[replayai] recordStep() called outside of an active trace — step was not recorded");
         return;
+    }
     // Infer offset from session start if missing.
     if (step.t === undefined && step.offsetMs === undefined) {
         step.t = Math.max(0, nowMs() - s.__startMs);
@@ -53,6 +66,57 @@ export function appendStep(step) {
     if (step.durationMs === undefined)
         step.durationMs = 0;
     s.steps.push(step);
+}
+// ---- Structured exception capture -----------------------------------------
+/**
+ * Parse a V8-style stack trace string into structured frames. Best-effort —
+ * sets `extractionFailed: true` (via the caller) on any throw. Each frame:
+ *   { file?, line?, column?, function? }
+ *
+ * Handles lines like:
+ *   "    at foo (/path/file.js:10:20)"
+ *   "    at /path/file.js:10:20"
+ *   "    at Object.<anonymous> (/path/file.js:5:1)"
+ *   "    at Module._compile (node:internal/modules/cjs/loader:999:30)"
+ */
+export function parseStackTrace(stack) {
+    if (!stack)
+        return [];
+    const frames = [];
+    // Lines look like: "    at FUNC (FILE:LINE:COL)" or "    at FILE:LINE:COL"
+    const re = /^\s*at\s+(?:(.+?)\s+\()?(.+?):(\d+):(\d+)\)?\s*$/;
+    for (const line of stack.split("\n")) {
+        const m = re.exec(line);
+        if (!m)
+            continue;
+        const fn = m[1] || undefined;
+        const file = m[2] || undefined;
+        const ln = m[3] ? parseInt(m[3], 10) : undefined;
+        const col = m[4] ? parseInt(m[4], 10) : undefined;
+        frames.push({ function: fn, file, line: ln, column: col });
+    }
+    return frames;
+}
+/** Build the structured exception record, never throwing. */
+function captureException(err) {
+    const name = err instanceof Error ? err.name : typeof err === "string" ? "Error" : "UnknownError";
+    const message = err instanceof Error ? err.message : String(err);
+    const rawStack = err instanceof Error && err.stack ? err.stack : "";
+    let stackFrames = [];
+    let extractionFailed = false;
+    try {
+        stackFrames = parseStackTrace(rawStack);
+    }
+    catch {
+        extractionFailed = true;
+        stackFrames = [];
+    }
+    if (!extractionFailed && rawStack && stackFrames.length === 0) {
+        // Not a parse failure per se, but mark so consumers know frames are empty.
+        // Keep `extractionFailed: false` — we successfully parsed, there was just
+        // nothing to extract.
+    }
+    return { name, message, stackFrames, rawStack, extractionFailed };
 }
 /** Compute final totals + status and POST the session to the API. */
 async function endAndFlush(session) {
@@ -74,15 +138,28 @@ async function endAndFlush(session) {
     else if (session.steps.some((s) => s.status === "failed")) {
         status = "failed";
     }
-    else if (session.steps.length > 0) {
-        status = "success";
-    }
     else {
         status = "success";
     }
     const tokenTotal = session.steps.reduce((a, s) => a + (s.tokensIn ?? 0) + (s.tokensOut ?? 0), 0);
     const costUsd = estimateCost(session.steps);
-    await flushSession({
+    // If an exception was captured, append a structured error step BEFORE flush
+    // so the dashboard can render stack frames + raw stack.
+    if (session.error !== undefined) {
+        const ex = captureException(session.error);
+        const errStep = {
+            type: "error",
+            name: ex.name || "Error",
+            status: "failed",
+            t: Math.max(0, wallClockDuration),
+            offsetMs: Math.max(0, wallClockDuration),
+            durationMs: 0,
+            input: ex.message,
+            output: JSON.stringify(ex),
+        };
+        session.steps.push(errStep);
+    }
+    return flushSession({
         sessionId: session.id,
         name: session.name,
         agent: session.agent,
@@ -95,11 +172,20 @@ async function endAndFlush(session) {
         tokenTotal,
         costUsd,
         steps: session.steps,
+    }).then((result) => {
+        // Stash on the session so consumers can read it via currentSession() after
+        // withTrace returns (the session object reference outlives the ALS run).
+        session.__flushResult = result;
+        return result;
     });
 }
 /**
  * `withTrace` — async context manager. Wraps a function body in a recorded
  * session; on exit computes duration/tokens/cost/status and POSTs to the API.
+ *
+ * Always enters the AsyncLocalStorage run — even when not sampled — so that
+ * recordStep() still has a session to attach to. Only the API flush is gated
+ * by the sampler (errors always flush regardless of sampling).
  *
  * Errors from the wrapped function are re-thrown as-is; recording failures
  * are swallowed unless `strict` mode is on.
@@ -107,11 +193,8 @@ async function endAndFlush(session) {
 export async function withTrace(name, opts, fn) {
     const cfg = getConfig();
     const rate = opts?.sampleRate ?? cfg.sampleRate;
-    if (!shouldSample(rate)) {
-        // Not sampled: run the fn without tracing.
-        return await fn();
-    }
-    const session = startSession(name, opts);
+    const sampled = shouldSample(rate);
+    const session = startSession(name, opts, sampled);
     return await storage.run(session, async () => {
         let result;
         try {
@@ -122,6 +205,7 @@ export async function withTrace(name, opts, fn) {
         catch (err) {
             session.status = "failed";
             session.error = err;
+            // Errors always flush, even when not sampled.
             try {
                 await endAndFlush(session);
             }
@@ -131,12 +215,15 @@ export async function withTrace(name, opts, fn) {
             }
             throw err;
         }
-        try {
-            await endAndFlush(session);
-        }
-        catch (flushErr) {
-            if (cfg.strict)
-                throw flushErr;
+        // Success path: only flush if sampled.
+        if (session.__sampled) {
+            try {
+                await endAndFlush(session);
+            }
+            catch (flushErr) {
+                if (cfg.strict)
+                    throw flushErr;
+            }
         }
         return result;
     });

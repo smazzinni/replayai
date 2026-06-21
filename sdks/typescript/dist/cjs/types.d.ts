@@ -75,6 +75,61 @@ export interface RunOptions {
     agent: string;
     framework?: string;
 }
+/**
+ * Options for flexible mock matching in `ReplaySession.mock()`.
+ * Defaults to exact-name match. Combine flags for AND-style filtering.
+ */
+export interface MockMatchOptions {
+    /** Match if the step name starts with `fnName`. */
+    isPrefix?: boolean;
+    /** Treat `fnName` as a regex pattern (matched against the step name). */
+    isRegex?: boolean;
+    /** Case-insensitive substring check against the step's input. */
+    inputContains?: string;
+    /** Case-insensitive equality against the first 100 chars of step input. */
+    inputSample?: string;
+}
+/** Internal representation of a registered mock. */
+export interface MockEntry {
+    /** Original `fnName` argument (name, prefix, or regex source). */
+    pattern: string;
+    /** Canned response (JSON string). */
+    response: string;
+    options: MockMatchOptions;
+    /** Compiled regex (when `isRegex` is set). */
+    regex?: RegExp;
+    /** Set true once matched against at least one step — used for the "no match" warning. */
+    matched?: boolean;
+}
+/** Single divergence between a loaded trace and a live compare run. */
+export interface CompareDivergence {
+    step: number;
+    field: string;
+    loaded: unknown;
+    live: unknown;
+}
+/** Result of `ReplaySession.compare()`. */
+export interface CompareResult {
+    matches: boolean;
+    stepCountLoaded: number;
+    stepCountLive: number;
+    divergences: CompareDivergence[];
+}
+/** A single parsed frame from an error stack trace. */
+export interface StackFrame {
+    file?: string;
+    line?: number;
+    column?: number;
+    function?: string;
+}
+/** Structured representation of an exception captured inside `withTrace()`. */
+export interface CapturedException {
+    name: string;
+    message: string;
+    stackFrames: StackFrame[];
+    rawStack: string;
+    extractionFailed: boolean;
+}
 export interface RecordStepInput {
     type?: StepType;
     name: string;
@@ -100,6 +155,22 @@ export interface ConfigOptions {
     sampleRate?: number;
     strict?: boolean;
     redactPatterns?: Array<string | RegExp>;
+    /** Per-request timeout in ms (default 30000). */
+    timeoutMs?: number;
+    /** Max steps to retain per session before truncation (default 200). */
+    maxSteps?: number;
+    /** When false, entropy-based redaction is disabled (default true). */
+    redactStrict?: boolean;
+}
+/** Result of `flushSession()` — duplicated here (structurally) to avoid a
+ *  circular type import between types.ts and store.ts. */
+export interface LastFlushResult {
+    ok: boolean;
+    sessionId?: string;
+    url?: string;
+    error?: string;
+    truncated?: boolean;
+    queued?: boolean;
 }
 /**
  * Internal representation of a session being recorded. Populated by
@@ -117,6 +188,11 @@ export interface InternalSession {
     __startMs: number;
     steps: SessionStep[];
     status: SessionStatus;
+    /** True when the session was selected by the sampler (will be flushed). */
+    __sampled?: boolean;
+    /** Set by `endAndFlush` after the POST completes. Lets consumers capture the
+     *  session via `currentSession()` inside `withTrace` and read the URL afterward. */
+    __flushResult?: LastFlushResult;
     error?: unknown;
     endAt?: Date;
 }

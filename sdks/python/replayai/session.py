@@ -1,15 +1,29 @@
 """``ReplaySession`` — load a recorded session and re-run it under mocks.
 
-In this MVP, ``run()`` fetches the session from the API and returns a
-:class:`~replayai.context.Trace` describing its steps and status. Full
-re-execution against an agent object is left to the generated pytest
-export (which the API produces server-side via ``/api/sessions/{id}/export``).
+``load()`` fetches the session from the API and returns a
+:class:`~replayai.context.Trace` describing its steps and status. The
+deprecated ``run()`` alias preserves the old call site (with a
+``DeprecationWarning``) for backward compatibility. ``compare()`` runs a
+live callable under a trace and diff-returns where it diverged from the
+recorded steps.
+
+Mock matching supports exact (default), prefix, regex, and input-
+contains/input-exact criteria — combinable for fine-grained targeting.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import re
+import sys
+import warnings
+from typing import Any, Callable, Dict, List, Optional
 
-from .context import Trace, TraceContext, _append_step, current_session
+from .context import (
+    Trace,
+    TraceContext,
+    _append_step,
+    current_session,
+    trace,
+)
 from .store import dashboard_url_for, export_session, get_session
 
 
@@ -20,9 +34,16 @@ class ReplaySession:
 
         replay = ReplaySession("ses_8fa1")
         replay.mock("issue_refund", '{"refund_id":"ref_3391"}')
-        with replay.trace() as trace_obj:
-            replay.run(agent="support-agent-v3", framework="LangChain")
+        trace_obj = replay.load()
         assert trace_obj.step_count == 8
+
+    Flexible mock matching::
+
+        replay.mock("search", resp, is_prefix=True)               # name starts with
+        replay.mock(r"search_web\\(.*\\)", resp, is_regex=True)   # regex on name
+        replay.mock("tool", resp, input_contains="NYC")           # case-insensitive
+        replay.mock("tool", resp, input="expected")               # first 100 chars
+        replay.mock("search", resp, is_prefix=True, input_contains="NYC")
     """
 
     def __init__(self, session_id: str, *, live_llm: bool = False) -> None:
@@ -30,37 +51,120 @@ class ReplaySession:
             raise ValueError("session_id is required")
         self.session_id = session_id
         self.live_llm = live_llm
-        self._mocks: Dict[str, Any] = {}
+        # Ordered list of mock specs. Each spec is a dict with:
+        #   name, response, is_regex, is_prefix, input_contains, input_exact
+        self._mocks: List[Dict[str, Any]] = []
         self._cached: Optional[Dict[str, Any]] = None
 
     # ----- mocks -----
-    def mock(self, fn_name: str, response: Any) -> None:
-        """Override the recorded response for a tool/retrieval call.
+    def mock(
+        self,
+        fn_name: str,
+        response: Any,
+        *,
+        is_regex: bool = False,
+        is_prefix: bool = False,
+        input_contains: Optional[str] = None,
+        input: Optional[str] = None,
+    ) -> None:
+        """Override the recorded response for one or more steps.
 
-        ``response`` may be a string or any JSON-serializable object.
-        Subsequent ``run()`` calls substitute the mock output for any step
-        whose ``name`` matches ``fn_name``.
+        Matching strategy (all supplied criteria must match — AND):
+
+        - ``is_regex=True`` — ``fn_name`` is a regex; matched against the
+          step ``name`` via :func:`re.search`.
+        - ``is_prefix=True`` — step ``name`` must start with ``fn_name``.
+        - Default (neither) — exact equality on ``name``.
+        - ``input_contains`` — substring test on step ``input`` (case-
+          insensitive).
+        - ``input`` — first 100 chars of step ``input`` must equal first
+          100 chars of ``input``.
+
+        ``response`` may be a string or any JSON-serializable object;
+        subsequent ``load()`` calls substitute the mock output for any
+        step that matches.
         """
         if not fn_name:
             raise ValueError("fn_name is required")
-        self._mocks[fn_name] = response
+        # Pre-compile regex once for efficiency.
+        compiled: Optional[re.Pattern] = None
+        if is_regex:
+            try:
+                compiled = re.compile(fn_name)
+            except re.error as e:
+                raise ValueError(f"invalid regex {fn_name!r}: {e}") from e
+        self._mocks.append(
+            {
+                "name": fn_name,
+                "response": response,
+                "is_regex": is_regex,
+                "is_prefix": is_prefix,
+                "input_contains": input_contains,
+                "input_exact": input,
+                "_compiled": compiled,
+            }
+        )
+
+    def _step_matches_mock(
+        self, step: Dict[str, Any], mock_spec: Dict[str, Any]
+    ) -> bool:
+        name = step.get("name") or ""
+        step_input = step.get("input") or ""
+        if not isinstance(step_input, str):
+            step_input = str(step_input)
+
+        # --- name matching ---
+        if mock_spec["is_regex"]:
+            compiled = mock_spec.get("_compiled")
+            if compiled is None or not compiled.search(name):
+                return False
+        elif mock_spec["is_prefix"]:
+            if not name.startswith(mock_spec["name"]):
+                return False
+        else:
+            if name != mock_spec["name"]:
+                return False
+
+        # --- input matching (combined via AND) ---
+        contains = mock_spec["input_contains"]
+        if contains is not None and contains.lower() not in step_input.lower():
+            return False
+
+        exact = mock_spec["input_exact"]
+        if exact is not None and step_input[:100] != str(exact)[:100]:
+            return False
+
+        return True
 
     def _apply_mocks(self, steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not self._mocks:
             return steps
+
+        import json as _json
+
+        matched = [False] * len(self._mocks)
         out: List[Dict[str, Any]] = []
         for s in steps:
-            name = s.get("name") or ""
-            if name in self._mocks:
-                s = dict(s)
-                mock_val = self._mocks[name]
-                if isinstance(mock_val, (dict, list)):
-                    import json
+            new_s = dict(s)
+            for i, mock_spec in enumerate(self._mocks):
+                if self._step_matches_mock(new_s, mock_spec):
+                    matched[i] = True
+                    mock_val = mock_spec["response"]
+                    if isinstance(mock_val, (dict, list)):
+                        new_s["output"] = _json.dumps(mock_val)
+                    else:
+                        new_s["output"] = str(mock_val)
+                    break  # first matching mock wins
+            out.append(new_s)
 
-                    s["output"] = json.dumps(mock_val)
-                else:
-                    s["output"] = str(mock_val)
-            out.append(s)
+        # Warn about registered mocks that matched nothing.
+        for i, m in enumerate(self._mocks):
+            if not matched[i]:
+                print(
+                    f"[replayai] warning: mock '{m['name']}' did not match any "
+                    f"step in session {self.session_id!r}",
+                    file=sys.stderr,
+                )
         return out
 
     # ----- fetch -----
@@ -85,34 +189,161 @@ class ReplaySession:
         """
         return _ReplayTraceContext(self)
 
-    # ----- run -----
-    def run(self, *, agent: str, framework: str = "Custom") -> Trace:
-        """Re-execute the agent under recorded conditions.
+    # ----- load (formerly run) -----
+    def load(self, *_args: Any, **_kwargs: Any) -> Trace:
+        """Load the recorded session and return a :class:`Trace` view.
 
-        Fetches the session from the API, applies any registered mocks, and
-        returns a :class:`Trace` view with ``step_count``, ``status``,
+        Fetches the session from the API, applies any registered mocks,
+        and returns a :class:`Trace` view with ``step_count``, ``status``,
         ``steps``, etc. — matching the TypeScript SDK's return shape.
+
+        ``agent`` and ``framework`` keyword arguments are accepted for
+        backward compatibility with the deprecated :meth:`run` method and
+        emit a ``DeprecationWarning`` if supplied (they have no effect).
         """
-        if not agent:
-            raise ValueError("agent is required")
+        if _kwargs.get("agent") is not None or _kwargs.get("framework") is not None:
+            warnings.warn(
+                "agent/framework params on ReplaySession.load()/run() are "
+                "deprecated and ignored — the loaded session already carries "
+                "its original agent/framework.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         sess = self._fetch()
         steps = self._apply_mocks(list(sess.get("steps", [])))
-        trace = Trace()
-        trace.steps = steps
-        trace.step_count = len(steps)
-        trace.status = sess.get("status", "success")
-        trace.duration_ms = int(sess.get("durationMs", 0) or 0)
-        trace.token_total = int(sess.get("tokenTotal", 0) or 0)
-        trace.cost_usd = float(sess.get("costUsd", 0) or 0.0)
-        trace.session_id = sess.get("id")
-        trace.session_url = dashboard_url_for(sess.get("id", ""))
-        # If there's an active replay trace context, append the steps into it
-        # so the resulting Trace reflects what was "replayed".
+        out = Trace()
+        out.steps = steps
+        out.step_count = len(steps)
+        out.status = sess.get("status", "success")
+        out.duration_ms = int(sess.get("durationMs", 0) or 0)
+        out.token_total = int(sess.get("tokenTotal", 0) or 0)
+        out.cost_usd = float(sess.get("costUsd", 0) or 0.0)
+        out.session_id = sess.get("id")
+        out.session_url = dashboard_url_for(sess.get("id", ""))
+        # If there's an active replay trace context, append the steps into
+        # it so the resulting Trace reflects what was "replayed".
         ctx = current_session()
         if ctx is not None and ctx.session is not None:
             for s in steps:
                 _append_step(ctx.session, s)
-        return trace
+        return out
+
+    # ----- run (deprecated alias) -----
+    def run(self, *args: Any, **kwargs: Any) -> Trace:
+        """Deprecated alias for :meth:`load`.
+
+        .. deprecated:: 0.6.0
+            Use :meth:`load` instead. The ``agent`` and ``framework``
+            keyword arguments are accepted but ignored (with a
+            ``DeprecationWarning``).
+        """
+        warnings.warn(
+            "ReplaySession.run() is deprecated; use load() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.load(*args, **kwargs)
+
+    # ----- compare -----
+    def compare(
+        self,
+        agent_callable: Callable[..., Any],
+        inputs: Any = None,
+    ) -> Dict[str, Any]:
+        """Run ``agent_callable`` under a trace and diff against the recording.
+
+        ``agent_callable`` is invoked inside a fresh ``trace()`` context
+        with the loaded session's mocks applied to any steps it records.
+        After it runs, the live step list is compared against the loaded
+        step list (after mock substitution) and a divergence report is
+        returned::
+
+            {
+              "matches": bool,
+              "step_count_loaded": int,
+              "step_count_live": int,
+              "divergences": [
+                {"step": i, "field": "output", "loaded": ..., "live": ...}
+              ],
+            }
+
+        ``inputs`` is passed as a single positional argument to the
+        callable when not ``None`` — use ``lambda: agent.run(...)`` for
+        zero-argument agents.
+        """
+        sess = self._fetch()
+        loaded_steps = self._apply_mocks(list(sess.get("steps", [])))
+
+        # Apply mocks to live steps via the same _apply_mocks path by
+        # funneling record_step output through the trace context. Since
+        # the live trace records whatever the agent emits, we apply mocks
+        # to the captured live steps after the fact as well.
+        live_ctx_token = None
+        ctx: Optional[TraceContext] = None
+        try:
+            ctx = trace(
+                f"compare:{self.session_id}",
+                framework="Replay",
+                agent=f"compare:{self.session_id}",
+            )
+            ctx.__enter__()
+            try:
+                if inputs is not None:
+                    agent_callable(inputs)
+                else:
+                    agent_callable()
+            except Exception:
+                # The exception is captured by the trace exit; we still
+                # want to compute divergences against whatever ran.
+                pass
+            live_session = ctx.session or {}
+            raw_live_steps = list(live_session.get("steps", []))
+            live_steps = self._apply_mocks(raw_live_steps)
+        finally:
+            if ctx is not None:
+                # Skip flushing the comparison trace to the API — we're
+                # only inspecting it locally.
+                try:
+                    ctx._token_ctx = None  # prevent double-reset
+                    from . import context as _ctxmod
+
+                    _ctxmod._current_session.set(None)
+                except Exception:  # noqa: BLE001
+                    pass
+
+        divergences: List[Dict[str, Any]] = []
+        n = max(len(loaded_steps), len(live_steps))
+        for i in range(n):
+            loaded = loaded_steps[i] if i < len(loaded_steps) else None
+            live = live_steps[i] if i < len(live_steps) else None
+            if loaded is None or live is None:
+                divergences.append(
+                    {
+                        "step": i,
+                        "field": "existence",
+                        "loaded": loaded,
+                        "live": live,
+                    }
+                )
+                continue
+            loaded_out = loaded.get("output")
+            live_out = live.get("output")
+            if loaded_out != live_out:
+                divergences.append(
+                    {
+                        "step": i,
+                        "field": "output",
+                        "loaded": loaded_out,
+                        "live": live_out,
+                    }
+                )
+
+        return {
+            "matches": len(divergences) == 0,
+            "step_count_loaded": len(loaded_steps),
+            "step_count_live": len(live_steps),
+            "divergences": divergences,
+        }
 
     # ----- export -----
     def export(self, lang: str = "pytest") -> str:

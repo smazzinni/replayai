@@ -13,8 +13,14 @@ from typing import List, Optional
 
 # Default redaction patterns. Each is applied as a regex against the textual
 # representation of every step input/output before it is written.
+#
+# NOTE: the overly-broad ``[A-Z0-9]{28,}`` heuristic that earlier versions
+# used is intentionally removed — it produced false positives on short UUIDs,
+# hashes, and Base64 fragments. High-entropy detection in ``redact.py``
+# handles those cases more precisely with a whitelist guard.
 DEFAULT_REDACT_PATTERNS: List[str] = [
-    r"sk-[a-zA-Z0-9]{20,}",          # OpenAI-style API keys
+    # OpenAI API keys: sk-, sk-proj-, sk-svcacct-, sk-admin- prefixes.
+    r"sk-(?:proj|svcacct|admin)?-?[a-zA-Z0-9]{20,}",
     r"Bearer\s+[a-zA-Z0-9._\-]+",    # Authorization headers / tokens
     r"password=[^\s&]+",             # password=... in URLs / form bodies
     r"[\"']?api[_-]?key[\"']?\s*[:=]\s*[\"']?[a-zA-Z0-9]{20,}",  # api_key=...
@@ -52,9 +58,16 @@ class Config:
     storage: str = "cloud"
     storage_path: str = "./replays"
     api_url: str = "http://localhost:3000"
-    dashboard_url: str = "http://localhost:7373"
+    dashboard_url: str = "http://localhost:3000"
     sample_rate: float = 1.0
     strict: bool = False
+    # HTTP request timeout in seconds (applies to every store request).
+    timeout: float = 30.0
+    # Hard ceiling on the number of steps persisted per session.
+    max_steps: int = 200
+    # When True, sampling that would drop a session is bypassed if the
+    # session ended in ``failed`` status — failures are always recorded.
+    always_record_failures: bool = True
     redact_patterns: List[str] = field(
         default_factory=lambda: list(DEFAULT_REDACT_PATTERNS)
     )
@@ -85,6 +98,9 @@ class Config:
             "dashboard_url": self.dashboard_url,
             "sample_rate": self.sample_rate,
             "strict": self.strict,
+            "timeout": self.timeout,
+            "max_steps": self.max_steps,
+            "always_record_failures": self.always_record_failures,
             "redact_patterns": list(self.redact_patterns),
         }
 
@@ -96,9 +112,18 @@ def _load_from_env() -> Config:
     storage = os.environ.get("REPLAYAI_STORAGE", "cloud")
     storage_path = os.environ.get("REPLAYAI_STORAGE_PATH", "./replays")
     api_url = os.environ.get("REPLAYAI_API_URL", "http://localhost:3000")
-    dashboard_url = os.environ.get("REPLAYAI_DASHBOARD_URL", "http://localhost:7373")
+    dashboard_url = os.environ.get("REPLAYAI_DASHBOARD_URL", "http://localhost:3000")
     sample_rate = _parse_float(os.environ.get("REPLAYAI_SAMPLE_RATE"), 1.0)
     strict = _parse_bool(os.environ.get("REPLAYAI_STRICT"), False)
+    timeout = _parse_float(os.environ.get("REPLAYAI_TIMEOUT"), 30.0)
+    max_steps_env = os.environ.get("REPLAYAI_MAX_STEPS")
+    try:
+        max_steps = int(max_steps_env) if max_steps_env and max_steps_env.strip() else 200
+    except (TypeError, ValueError):
+        max_steps = 200
+    always_record_failures = _parse_bool(
+        os.environ.get("REPLAYAI_ALWAYS_RECORD_FAILURES"), True
+    )
 
     env_patterns = _parse_patterns(os.environ.get("REPLAYAI_REDACT_PATTERNS"))
     redact_patterns = env_patterns if env_patterns else list(DEFAULT_REDACT_PATTERNS)
@@ -112,6 +137,9 @@ def _load_from_env() -> Config:
         dashboard_url=dashboard_url,
         sample_rate=sample_rate,
         strict=strict,
+        timeout=timeout,
+        max_steps=max_steps,
+        always_record_failures=always_record_failures,
         redact_patterns=redact_patterns,
     )
 
@@ -139,6 +167,9 @@ def configure(
     dashboard_url: Optional[str] = None,
     sample_rate: Optional[float] = None,
     strict: Optional[bool] = None,
+    timeout: Optional[float] = None,
+    max_steps: Optional[int] = None,
+    always_record_failures: Optional[bool] = None,
     redact_patterns: Optional[List[str]] = None,
 ) -> Config:
     """Override SDK configuration programmatically.
@@ -164,6 +195,12 @@ def configure(
     if strict is not None:
         _config.strict = bool(strict)
         strict_mode = _config.strict
+    if timeout is not None:
+        _config.timeout = float(timeout)
+    if max_steps is not None:
+        _config.max_steps = int(max_steps)
+    if always_record_failures is not None:
+        _config.always_record_failures = bool(always_record_failures)
     if redact_patterns is not None:
         _config.redact_patterns = list(redact_patterns)
         _config._recompile()

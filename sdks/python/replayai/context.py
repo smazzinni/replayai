@@ -7,7 +7,9 @@ final totals and flushes the session via :mod:`replayai.store`.
 from __future__ import annotations
 
 import contextvars
+import functools
 import inspect
+import json
 import random
 import sys
 import time
@@ -146,30 +148,23 @@ class TraceContext:
         # re-enter calls share them. _reenter copies these forward.
         self._wrapped = fn
         self._wrapped_is_async = is_async
-        name = getattr(fn, "__name__", self.name)
-        # Build the wrapper once; each call constructs its own TraceContext.
         template = self
 
         if is_async:
-
+            @functools.wraps(fn)
             async def async_wrapper(*args, **kwargs):
                 ctx = template._reenter()
                 async with ctx:
                     return await fn(*args, **kwargs)
 
-            async_wrapper.__name__ = name
-            async_wrapper.__doc__ = getattr(fn, "__doc__", None)
-            async_wrapper.__wrapped__ = fn  # type: ignore[attr-defined]
             return async_wrapper
 
+        @functools.wraps(fn)
         def sync_wrapper(*args, **kwargs):
             ctx = template._reenter()
             with ctx:
                 return fn(*args, **kwargs)
 
-        sync_wrapper.__name__ = name
-        sync_wrapper.__doc__ = getattr(fn, "__doc__", None)
-        sync_wrapper.__wrapped__ = fn  # type: ignore[attr-defined]
         return sync_wrapper
 
     # ----- context manager surface -----
@@ -288,7 +283,9 @@ class TraceContext:
         if exc is not None:
             self.session["status"] = "failed"
             # Capture the exception as a final error step so the dashboard
-            # shows why it failed.
+            # shows why it failed. The output is structured JSON (per the
+            # v0.6.0 spec) so the dashboard can render frame-by-frame.
+            exception_data = _capture_exception(exc_type, exc, tb)
             steps.append(
                 {
                     "type": "error",
@@ -301,9 +298,7 @@ class TraceContext:
                     "tokensIn": 0,
                     "tokensOut": 0,
                     "input": "",
-                    "output": "".join(
-                        traceback.format_exception(exc_type, exc, tb)
-                    ),
+                    "output": json.dumps(exception_data, ensure_ascii=False),
                 }
             )
         elif any(s.get("status") == "failed" for s in steps):
@@ -313,11 +308,16 @@ class TraceContext:
         else:
             self.session["status"] = "success"
 
-        # Sampling: drop non-failed sessions when not sampled.
-        if not self._sampled and self.session["status"] != "failed":
-            return
-
         cfg = _config.get_config()
+        # Sampling: drop non-failed sessions when not sampled. Failures are
+        # always recorded unless the user explicitly opts out via
+        # ``Config.always_record_failures = False``.
+        if not self._sampled:
+            is_failure = self.session["status"] == "failed"
+            record_failures = cfg.always_record_failures
+            if not (is_failure and record_failures):
+                return
+
         # Only flush when storage includes "cloud". Local-only mode persists
         # to disk in MVP — print a notice.
         try:
@@ -414,6 +414,47 @@ def _local_persist(session: Dict[str, Any]) -> None:
         if cfg.strict or _config.strict_mode:
             raise
         print(f"[replayai] warning: local persist failed: {e}", file=sys.stderr)
+
+
+def _capture_exception(
+    exc_type: Any, exc: BaseException, tb: Any
+) -> Dict[str, Any]:
+    """Build a structured exception record for the dashboard.
+
+    Returns a JSON-serializable dict with ``exception_type``, ``message``,
+    ``frames`` (list of file/line/function/code dicts), ``raw_traceback``,
+    and ``extraction_failed`` (set True if frame extraction raised — in
+    which case ``frames`` is empty and only the raw string is preserved).
+    """
+    raw_tb = ""
+    try:
+        raw_tb = "".join(traceback.format_exception(exc_type, exc, tb))
+    except Exception:  # noqa: BLE001
+        raw_tb = traceback.format_exc() or ""
+
+    try:
+        frames = [
+            {
+                "file": f.filename,
+                "line": f.lineno,
+                "function": f.name,
+                "code": f.line,
+            }
+            for f in traceback.extract_tb(tb) if tb is not None
+        ]
+        extraction_failed = False
+    except Exception:  # noqa: BLE001
+        frames = []
+        extraction_failed = True
+
+    return {
+        "exception_type": (exc.__class__.__name__ if exc is not None else
+                           (exc_type.__name__ if exc_type else "Error")),
+        "message": str(exc) if exc is not None else "",
+        "frames": frames,
+        "raw_traceback": raw_tb,
+        "extraction_failed": extraction_failed,
+    }
 
 
 # ----- public factories -----
