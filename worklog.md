@@ -455,3 +455,56 @@ Work Log:
 Stage Summary:
 - Vercel Production deployment is FIXED and live. The failure was a npm peer-dependency conflict (nodemailer v9 vs next-auth v4's peerOptional v7), not a code or build-script issue.
 - Lesson for future dependency additions: since bun.lock is gitignored, Vercel resolves via npm — always check `npm install` (not just `bun install`) succeeds before pushing, especially for packages with peer deps.
+
+---
+Task ID: webDevReview-202606221728
+Agent: main (orchestrator)
+Task: QA + continue dashboard/API/flow improvements (mandatory: styling + features).
+
+Work Log:
+- Reviewed worklog + git state: found 5 uncommitted files from the previous round (incomplete dashboard keyboard-shortcuts work). Finished the incomplete code first.
+- QA via agent-browser: verified dev server healthy, no console errors, all existing features work (partner form, GitHub stars, dashboard replay/diff/export).
+
+Completed improvements (3 commits pushed: 81f4fe1, 9aa64ec, c1d2c9b):
+
+1. Dashboard keyboard shortcuts (81f4fe1):
+   - j/k (or ↑/↓) navigate sessions, 1/2/3 switch tabs, ? toggles help overlay, Esc dismisses.
+   - Ignored inside inputs/textareas/selects so typing isn't hijacked.
+   - Shortcuts help overlay with kbd-styled keys + a keyboard button in the window chrome.
+
+2. Sessions list sort dropdown (81f4fe1):
+   - Sort by: most recent, longest first, highest cost, most steps.
+   - Numbered session indices (01, 02, 03…) for quick reference.
+   - Active session card now has a subtle ring shadow for better visual focus.
+
+3. Sessions API improvements (81f4fe1):
+   - Extracted shared cost estimator + validation to src/lib/session-ingest.ts (MODEL_RATES, estimateCost, clampInt, sanitizeStepText, VALID_* enums).
+   - Input validation: step type/status/model/name/tags sanitized + clamped. Malformed steps skipped instead of crashing.
+   - Added `hasMore` pagination hint to list response.
+   - `startedAt` validation (rejects invalid ISO with 400). `orderBy` whitelist.
+   - Step text truncated at 100KB to prevent DB bloat.
+
+4. Stats API + StatsOverview improvements (9aa64ec):
+   - /api/stats now returns: `dailyTrend` (14-day bucket for sparkline), `costByModel` (top-6 by cost), `avgDurationMs`, `avgSteps`.
+   - StatsOverview: 6th stat card ("Avg run" with Timer icon), 14-day activity SVG sparkline with gradient fill + failed-session dots, cost-by-model animated horizontal bar chart.
+   - Cards have hover effects (border brightens, icon scales).
+
+5. Replay timeline session header (c1d2c9b):
+   - Added cost (Coins icon + fmtCost) to the metadata line — was the only key metric missing.
+   - Added a tags row (monospace uppercase pills) below the metadata — PRODUCTION, CANARY, etc. now visible at a glance.
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings only).
+- agent-browser: page renders, no console errors, sort dropdown visible, keyboard shortcuts overlay works, tab switching (1/2/3) works, j/k navigation works.
+- /api/sessions: hasMore, withSteps, invalid-status handling all verified via curl.
+- /api/stats: returns dailyTrend (14 entries), costByModel (3 models), avgDurationMs (28854), avgSteps (5.8).
+
+Stage Summary:
+- Dashboard is now notably more functional: keyboard navigation, sort, sparkline trend, cost-by-model chart, richer session header. All using existing shadcn/ui components and the established dark-theme design system.
+- 3 commits pushed to GitHub main. Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- The 14-day sparkline shows 0 sessions in the trend because the seeded data is from Jan 14 (months ago). When real sessions are recorded via the SDK, the sparkline will populate. Consider adding a "record demo session" button that timestamps `startedAt` to `now` so the sparkline shows activity immediately.
+- The cost-by-model chart uses a 3:1 out:in token ratio heuristic (the stats aggregate doesn't store per-step in/out split). For exact per-model cost, store `tokensIn`/`tokensOut` separately in the aggregate or compute at query time.
+- Consider adding a session search with autocomplete (currently just a text filter).
+- The keyboard shortcuts could be extended to the diff/export tabs (e.g., d/e to switch).
