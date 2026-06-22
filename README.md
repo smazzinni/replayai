@@ -73,17 +73,6 @@ Open `http://localhost:3000`.
 
 ### Partner program email delivery
 
-The "Partner with US" form delivers each submission to
-**info@rioforge.com** via SMTP. Configure these env vars in production:
-
-```bash
-SMTP_HOST=smtp.your-provider.com
-SMTP_PORT=587
-SMTP_USER=your-username
-SMTP_PASS=your-password
-SMTP_FROM="ReplayAI <noreply@replayai.dev>"
-PARTNER_EMAIL_TO=info@rioforge.com
-```
 
 When SMTP is not configured (e.g. local dev), submissions are still saved to
 the database and visible at `GET /api/waitlist`.
