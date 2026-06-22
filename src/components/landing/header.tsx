@@ -6,6 +6,7 @@ import { Github, History, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useGitHubStars, formatCount } from "@/hooks/use-github-stars";
 import { GITHUB_URL } from "@/lib/site-config";
+import { ThemeToggle } from "./theme-toggle";
 
 const NAV = [
   { label: "Demo", href: "#demo" },
@@ -75,6 +76,7 @@ export function Header() {
           >
             Sign in
           </a>
+          <ThemeToggle />
           <motion.a
             href="/?view=setup"
             whileHover={{ scale: 1.03 }}

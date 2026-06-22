@@ -24,7 +24,14 @@ export interface Stats {
   avgDurationMs: number;
   avgSteps: number;
   dailyTrend: { date: string; total: number; failed: number }[];
-  costByModel: { model: string; cost: number; tokens: number; steps: number }[];
+  costByModel: {
+    model: string;
+    cost: number;
+    tokens: number;
+    tokensIn: number;
+    tokensOut: number;
+    steps: number;
+  }[];
   recentIds: string[];
 }
 

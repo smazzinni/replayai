@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DiffView } from "./diff-view";
 import { ExportView } from "./export-view";
 import { RecordSessionDialog } from "./record-session-dialog";
+import { RecentSessionsFeed } from "./recent-sessions-feed";
 import { ReplayTimeline } from "./replay-timeline";
 import { SessionsList } from "./sessions-list";
 import { StatsOverview } from "./stats-overview";
@@ -233,9 +234,10 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* stats strip */}
-      <div className="border-b border-border/60 bg-background/20 px-3 py-2.5">
+      {/* stats strip + recent sessions feed */}
+      <div className="space-y-2 border-b border-border/60 bg-background/20 px-3 py-2.5">
         <StatsOverview />
+        <RecentSessionsFeed onSelect={setSelectedId} />
       </div>
 
       {/* panel */}

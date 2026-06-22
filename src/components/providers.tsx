@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
 
@@ -58,8 +59,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => makeQueryClient());
   return (
     <QueryClientProvider client={client}>
-      <RealtimeListener />
-      {children}
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem={false}
+        disableTransitionOnChange
+      >
+        <RealtimeListener />
+        {children}
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { estimateCost } from "@/lib/session-ingest";
 
 export const dynamic = "force-dynamic";
 
@@ -62,41 +63,38 @@ export async function GET() {
     ...v,
   }));
 
-  // Cost-by-model breakdown (top 6 models by cost).
+  // Cost-by-model breakdown (top 6 models by cost). Tracks tokensIn and
+  // tokensOut separately so the per-model cost is EXACT (not a heuristic).
   const stepsWithModel = await db.step.findMany({
     where: { model: { not: null } },
     select: { model: true, tokensIn: true, tokensOut: true },
   });
-  const modelMap = new Map<string, { tokens: number; count: number }>();
+  const modelMap = new Map<
+    string,
+    { tokensIn: number; tokensOut: number; count: number }
+  >();
   for (const st of stepsWithModel) {
     if (!st.model) continue;
-    const entry = modelMap.get(st.model) ?? { tokens: 0, count: 0 };
-    entry.tokens += (st.tokensIn ?? 0) + (st.tokensOut ?? 0);
+    const entry = modelMap.get(st.model) ?? { tokensIn: 0, tokensOut: 0, count: 0 };
+    entry.tokensIn += st.tokensIn ?? 0;
+    entry.tokensOut += st.tokensOut ?? 0;
     entry.count++;
     modelMap.set(st.model, entry);
   }
-  // Estimate cost per model using the same rates as the ingest path.
-  const RATES: Record<string, { in: number; out: number }> = {
-    "gpt-4o": { in: 2.5, out: 10 },
-    "gpt-4o-mini": { in: 0.15, out: 0.6 },
-    "gpt-4-turbo": { in: 10, out: 30 },
-    "gpt-3.5-turbo": { in: 0.5, out: 1.5 },
-    "claude-3.5-sonnet": { in: 3, out: 15 },
-    "claude-3-5-haiku": { in: 0.8, out: 4 },
-    "claude-3-opus": { in: 15, out: 75 },
-    "gemini-1.5-pro": { in: 1.25, out: 5 },
-    "gemini-1.5-flash": { in: 0.075, out: 0.3 },
-    "llama-3.1-70b": { in: 0.59, out: 0.79 },
-  };
-  const fallback = RATES["gpt-4o"];
   const costByModel = Array.from(modelMap.entries())
     .map(([model, v]) => {
-      const rate = RATES[model] ?? fallback;
-      // We don't have the in/out split per step here, so estimate with a
-      // 3:1 out:in ratio heuristic (typical for completions). This is only
-      // for the dashboard chart — the per-session cost is exact.
-      const estCost = (v.tokens / 1_000_000) * ((rate.in + rate.out * 3) / 4);
-      return { model, cost: Math.round(estCost * 1000) / 1000, tokens: v.tokens, steps: v.count };
+      // Exact cost using the real in/out split + the shared rate table.
+      const cost = estimateCost([
+        { model, tokensIn: v.tokensIn, tokensOut: v.tokensOut },
+      ]);
+      return {
+        model,
+        cost,
+        tokens: v.tokensIn + v.tokensOut,
+        tokensIn: v.tokensIn,
+        tokensOut: v.tokensOut,
+        steps: v.count,
+      };
     })
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 6);
