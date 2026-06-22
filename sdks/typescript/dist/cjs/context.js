@@ -6,6 +6,39 @@
 // Always enters the AsyncLocalStorage run — even when not sampled — so that
 // recordStep() can still attach steps to a (non-flushed) session. The sampler
 // only gates the POST to the API (errors always flush).
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.currentSession = currentSession;
 exports.isSampled = isSampled;
@@ -167,7 +200,7 @@ async function endAndFlush(session) {
         };
         session.steps.push(errStep);
     }
-    return (0, store_js_1.flushSession)({
+    const flushPayload = {
         sessionId: session.id,
         name: session.name,
         agent: session.agent,
@@ -180,12 +213,37 @@ async function endAndFlush(session) {
         tokenTotal,
         costUsd,
         steps: session.steps,
-    }).then((result) => {
-        // Stash on the session so consumers can read it via currentSession() after
-        // withTrace returns (the session object reference outlives the ALS run).
-        session.__flushResult = result;
-        return result;
-    });
+    };
+    // Local persistence — write to disk when storage includes "local".
+    const cfg = (0, config_js_1.getConfig)();
+    let localId;
+    if (cfg.storage === "local" || cfg.storage === "both") {
+        try {
+            const { saveSession } = await Promise.resolve().then(() => __importStar(require("./local-store.js")));
+            localId = saveSession(flushPayload);
+        }
+        catch (e) {
+            const m = e instanceof Error ? e.message : String(e);
+            if (cfg.strict)
+                throw new Error(`ReplayAI local persist failed: ${m}`);
+            console.warn(`[replayai] local persist failed: ${m}`);
+        }
+    }
+    // Cloud persistence — POST to the API when storage includes "cloud".
+    if (cfg.storage === "cloud" || cfg.storage === "both") {
+        return (0, store_js_1.flushSession)(flushPayload).then((result) => {
+            session.__flushResult = result;
+            return result;
+        });
+    }
+    // Local-only: synthesize a success result with the local id + dashboard url.
+    const localResult = {
+        ok: true,
+        sessionId: localId,
+        url: localId ? `${cfg.dashboardUrl}/?s=${localId}` : undefined,
+    };
+    session.__flushResult = localResult;
+    return localResult;
 }
 /**
  * `withTrace` — async context manager. Wraps a function body in a recorded

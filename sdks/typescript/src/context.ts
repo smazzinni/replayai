@@ -18,7 +18,7 @@ import type {
 } from "./types.js";
 import { getConfig } from "./config.js";
 import { estimateCost } from "./cost.js";
-import { flushSession, type FlushResult } from "./store.js";
+import { flushSession, type FlushResult, type FlushPayload } from "./store.js";
 
 const storage = new AsyncLocalStorage<InternalSession>();
 
@@ -183,7 +183,7 @@ async function endAndFlush(session: InternalSession): Promise<FlushResult | unde
     session.steps.push(errStep);
   }
 
-  return flushSession({
+  const flushPayload: FlushPayload = {
     sessionId: session.id,
     name: session.name,
     agent: session.agent,
@@ -196,12 +196,38 @@ async function endAndFlush(session: InternalSession): Promise<FlushResult | unde
     tokenTotal,
     costUsd,
     steps: session.steps,
-  }).then((result) => {
-    // Stash on the session so consumers can read it via currentSession() after
-    // withTrace returns (the session object reference outlives the ALS run).
-    session.__flushResult = result;
-    return result;
-  });
+  };
+
+  // Local persistence — write to disk when storage includes "local".
+  const cfg = getConfig();
+  let localId: string | undefined;
+  if (cfg.storage === "local" || cfg.storage === "both") {
+    try {
+      const { saveSession } = await import("./local-store.js");
+      localId = saveSession(flushPayload);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      if (cfg.strict) throw new Error(`ReplayAI local persist failed: ${m}`);
+      console.warn(`[replayai] local persist failed: ${m}`);
+    }
+  }
+
+  // Cloud persistence — POST to the API when storage includes "cloud".
+  if (cfg.storage === "cloud" || cfg.storage === "both") {
+    return flushSession(flushPayload).then((result) => {
+      session.__flushResult = result;
+      return result;
+    });
+  }
+
+  // Local-only: synthesize a success result with the local id + dashboard url.
+  const localResult: FlushResult = {
+    ok: true,
+    sessionId: localId,
+    url: localId ? `${cfg.dashboardUrl}/?s=${localId}` : undefined,
+  };
+  session.__flushResult = localResult;
+  return localResult;
 }
 
 /**

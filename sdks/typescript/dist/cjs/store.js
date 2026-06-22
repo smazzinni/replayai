@@ -14,7 +14,7 @@ const node_crypto_1 = require("node:crypto");
 const config_js_1 = require("./config.js");
 /** SDK version (mirrored from index.ts — kept here to avoid a circular import
  *  just for the user-agent string). */
-const SDK_VERSION = "0.6.1";
+const SDK_VERSION = "0.7.0";
 // ---- In-memory retry queue -------------------------------------------------
 const QUEUE_MAX = 100;
 const queue = [];

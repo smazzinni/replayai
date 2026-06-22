@@ -395,21 +395,14 @@ def _session_start_ms(session: Dict[str, Any]) -> float:
 
 
 def _local_persist(session: Dict[str, Any]) -> None:
-    """MVP local-storage: write the session JSON into the configured dir."""
-    import json
-    import os
+    """Persist a session to local storage (JSON file under storage_path)."""
+    from .local_store import save_session
 
     cfg = _config.get_config()
-    path = cfg.storage_path
     try:
-        os.makedirs(path, exist_ok=True)
-        ts = int(time.time() * 1000)
-        fname = f"{session.get('name', 'session').replace('/', '_')}-{ts}.json"
-        full = os.path.join(path, fname)
-        # Strip internal keys.
-        out = {k: v for k, v in session.items() if not k.startswith("__")}
-        with open(full, "w", encoding="utf-8") as fh:
-            json.dump(out, fh, ensure_ascii=False, indent=2)
+        sid = save_session(session)
+        # Stash the assigned id back onto the session so the caller can use it.
+        session["id"] = sid
     except Exception as e:  # noqa: BLE001
         if cfg.strict or _config.strict_mode:
             raise

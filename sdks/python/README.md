@@ -4,10 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 Instrument Python agents, record every step (LLM calls, tool calls, retrievals, errors),
-and POST sessions to the ReplayAI dashboard where you can replay them, diff runs, and
+and view sessions in the built-in dashboard where you can replay them, diff runs, and
 export tests.
 
 - **Stdlib only** — `pip install replayai-sdk` brings no dependencies.
+- **Built-in dashboard** — `replayai ui` launches a self-contained dashboard server. No external app or database required.
 - **Decorator + context manager** — `@trace(...)` or `with trace(...) as ctx:`.
 - **Framework extras** — `pip install "replayai-sdk[langchain]"` for auto-instrumentation.
 
@@ -18,6 +19,13 @@ pip install replayai-sdk
 # or, with the LangChain integration:
 pip install "replayai-sdk[langchain]"
 ```
+
+> **Windows note:** If you see a warning like *"The script replayai.exe is installed in … which is not on PATH"*, either add that directory to your PATH or use `python -m replayai` instead — it works identically:
+>
+> ```bash
+> python -m replayai ui          # same as: replayai ui
+> python -m replayai record agent.py
+> ```
 
 ## 30-second usage
 
@@ -43,7 +51,42 @@ def handle_support_ticket(message: str) -> str:
 handle_support_ticket("I was charged twice, refund me.")
 ```
 
-Open the dashboard — your run is there with a full timeline.
+## Launching the dashboard
+
+The SDK ships with a self-contained dashboard server. Record sessions locally, then launch the UI to view them:
+
+```bash
+# 1. Record a session (stored locally by default when REPLAYAI_STORAGE=local)
+REPLAYAI_STORAGE=local replayai record my_agent.py
+
+# 2. Launch the dashboard
+replayai ui
+# → opens http://localhost:7373 in your browser
+# → shows all locally-recorded sessions with full step timelines
+```
+
+Options:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--port` | `7373` | Port to listen on |
+| `--storage` | `./replays` | Local storage path |
+| `--no-browser` | — | Don't auto-open the browser |
+
+The dashboard reads sessions from `{storage}/sessions/*.json` and serves:
+- `GET /` — single-page dashboard UI (stats, sessions list, step timeline)
+- `GET /api/sessions` — JSON session list
+- `GET /api/sessions/:id` — JSON single session with steps
+- `GET /api/stats` — JSON aggregate stats
+
+## CLI commands
+
+```bash
+replayai record <script.py> [--project <slug>] [--tags a,b]   # Run a script under a trace
+replayai test [tests/replay/] [--live-llm]                    # Run replay regression tests
+replayai ui [--port 7373] [--storage ./replays]               # Launch the dashboard
+replayai --version                                            # Print version
+```
 
 ## Configuration
 
@@ -54,6 +97,7 @@ Environment variables (all optional):
 | `REPLAYAI_PROJECT` | — | Default project slug/id |
 | `REPLAYAI_TOKEN` | — | Cloud API token |
 | `REPLAYAI_STORAGE` | `cloud` | `cloud`, `local`, or `both` |
+| `REPLAYAI_STORAGE_PATH` | `./replays` | Local storage directory (used when `storage` includes `local`) |
 | `REPLAYAI_API_URL` | `http://localhost:3000` | Cloud API base URL |
 | `REPLAYAI_DASHBOARD_URL` | `http://localhost:3000` | Dashboard base URL |
 | `REPLAYAI_SAMPLE_RATE` | `1.0` | Fraction of sessions to record |

@@ -42,11 +42,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     tst.add_argument("--tb", default="short", help="pytest --tb style.")
 
     # --- ui ---
-    ui = sub.add_parser("ui", help="Start the ReplayAI dashboard.")
+    ui = sub.add_parser("ui", help="Start the ReplayAI dashboard (self-contained server).")
     ui.add_argument("--port", type=int, default=7373, help="Port (default: 7373).")
-    ui.add_argument("--storage", default="./replays", help="Local storage path.")
-    ui.add_argument("--cloud", action="store_true", help="Use cloud sync.")
+    ui.add_argument("--storage", default="./replays", help="Local storage path (default: ./replays).")
+    ui.add_argument("--cloud", action="store_true", help="Use cloud sync (still serves the local UI).")
     ui.add_argument("--token", default=None, help="Cloud API token.")
+    ui.add_argument("--no-browser", action="store_true", help="Don't auto-open the browser.")
 
     args = parser.parse_args(argv)
 
@@ -131,25 +132,30 @@ def _cmd_test(args: argparse.Namespace) -> int:
 
 
 def _cmd_ui(args: argparse.Namespace) -> int:
-    """Start the dashboard."""
+    """Start the dashboard.
+
+    Launches the bundled self-contained dashboard server (stdlib-only) that
+    reads locally-stored sessions and serves a complete UI at the given port.
+    No external Next.js app or database is required — sessions recorded with
+    ``storage=local`` (or ``both``) appear automatically.
+    """
+    from . import dashboard_server
+
     if args.cloud or args.token:
         if args.token:
             os.environ["REPLAYAI_TOKEN"] = args.token
         print(f"[replayai] starting dashboard in cloud mode on port {args.port}")
     else:
-        os.environ["REPLAYAI_STORAGE_PATH"] = args.storage
+        os.environ.setdefault("REPLAYAI_STORAGE", "local")
+        os.environ.setdefault("REPLAYAI_STORAGE_PATH", args.storage)
         print(f"[replayai] starting dashboard in local mode on port {args.port}")
-        print(f"  storage: {args.storage}")
+        print(f"  storage: {os.path.abspath(args.storage)}")
 
-    # Try to start the Next.js dev server if we're in the project directory.
-    next_bin = os.path.join(os.getcwd(), "node_modules", ".bin", "next")
-    if os.path.isfile(next_bin):
-        print(f"[replayai] starting Next.js dashboard...")
-        os.execvp(next_bin, [next_bin, "dev", "-p", str(args.port)])
-    else:
-        print(f"[replayai] dashboard URL: http://localhost:{args.port}")
-        print("[replayai] (install the ReplayAI dashboard or run from the project root)")
-        return 0
+    return dashboard_server.start_server(
+        port=args.port,
+        storage_path=args.storage,
+        open_browser=not args.no_browser,
+    )
 
 
 if __name__ == "__main__":

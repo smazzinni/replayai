@@ -3,9 +3,10 @@
 [![npm version](https://img.shields.io/npm/v/@smazzinni/sdk?color=blue)](https://www.npmjs.com/package/@smazzinni/sdk)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-TypeScript SDK for [ReplayAI](https://github.com/smazzinni/replayai) — instrument JS/TS agents, record sessions, and replay/export them as tests.
+TypeScript SDK for [ReplayAI](https://github.com/smazzinni/replayai) — instrument JS/TS agents, record sessions, and view them in the built-in dashboard.
 
-- **Zero runtime deps.** Node 18+ built-ins only (`fetch`, `AsyncLocalStorage`, `crypto`).
+- **Zero runtime deps.** Node 18+ built-ins only (`fetch`, `AsyncLocalStorage`, `crypto`, `http`).
+- **Built-in dashboard.** `npx replayai ui` launches a self-contained server — no external app or database required.
 - **ESM + CJS** via the `exports` map.
 - **Async-safe** current-session tracking via `AsyncLocalStorage`.
 
@@ -22,8 +23,8 @@ npm install @smazzinni/sdk
 ```typescript
 import { withTrace, recordStep, configure } from "@smazzinni/sdk";
 
-// Point at a running ReplayAI app (default: http://localhost:3000)
-configure({ apiUrl: "http://localhost:3000" });
+// Store sessions locally so the built-in dashboard can show them.
+configure({ storage: "local", storagePath: "./replays" });
 
 await withTrace(
   "support-agent-v3",
@@ -49,7 +50,42 @@ await withTrace(
     });
   },
 );
-// → session POSTed to /api/sessions and visible in the dashboard.
+```
+
+## Launching the dashboard
+
+The SDK ships with a self-contained dashboard server (Node built-ins only). Record sessions locally, then launch the UI:
+
+```bash
+# 1. Record a session (stored locally when storage=local)
+#    Your code calls withTrace() + recordStep() as shown above.
+
+# 2. Launch the dashboard
+npx replayai ui
+# → opens http://localhost:7373 in your browser
+# → shows all locally-recorded sessions with full step timelines
+```
+
+Options:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--port` | `7373` | Port to listen on |
+| `--storage` | `./replays` | Local storage path |
+| `--no-browser` | — | Don't auto-open the browser |
+
+The dashboard reads sessions from `{storage}/sessions/*.json` and serves:
+- `GET /` — single-page dashboard UI (stats, sessions list, step timeline)
+- `GET /api/sessions` — JSON session list
+- `GET /api/sessions/:id` — JSON single session with steps
+- `GET /api/stats` — JSON aggregate stats
+
+## CLI commands
+
+```bash
+replayai ui [--port 7373] [--storage ./replays] [--no-browser]  # Launch the dashboard
+replayai version                                                # Print version
+replayai help                                                   # Show help
 ```
 
 ## API
@@ -132,7 +168,7 @@ configure({
 
 ```typescript
 import { VERSION } from "@smazzinni/sdk";
-console.log(VERSION); // "0.6.1"
+console.log(VERSION); // "0.7.0"
 ```
 
 ## Environment variables
@@ -146,8 +182,11 @@ console.log(VERSION); // "0.6.1"
 | `REPLAYAI_API_URL` | `http://localhost:3000` | Cloud API base URL |
 | `REPLAYAI_DASHBOARD_URL` | `http://localhost:3000` | Where session URLs point |
 | `REPLAYAI_REDACT_PATTERNS` | built-in set | Comma-separated regex patterns to redact |
+| `REPLAYAI_REDACT_STRICT` | `true` | Set `false` to disable entropy-based secret detection |
 | `REPLAYAI_SAMPLE_RATE` | `1.0` | Fraction of sessions to record (0.0–1.0) |
 | `REPLAYAI_STRICT` | `false` | Raise on recording failures instead of warning |
+| `REPLAYAI_TIMEOUT` | `30000` | Per-request HTTP timeout (ms) |
+| `REPLAYAI_MAX_STEPS` | `200` | Hard ceiling on steps persisted per session |
 
 ## Redaction
 

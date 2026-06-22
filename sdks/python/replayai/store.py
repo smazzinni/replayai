@@ -98,7 +98,7 @@ def _build_request(
     headers = {
         "Content-Type": "application/json",
         "Accept": accept,
-        "User-Agent": "replayai-python/0.6.1",
+        "User-Agent": "replayai-python/0.7.0",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
