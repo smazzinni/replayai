@@ -734,3 +734,45 @@ Unresolved / next-phase recommendations:
 - The star could be surfaced in the recent sessions feed (amber icon on starred cards).
 - Consider adding a "copy session link" action to the search results.
 - The diff view could show a summary of what changed (e.g. "2 outputs differ, 1 status change").
+
+---
+Task ID: webDevReview-202606222238
+Agent: main (orchestrator)
+Task: QA + implement next-phase recommendations (star in feed, copy-link, diff summary).
+
+Work Log:
+- Reviewed worklog + git state: clean. Last round added jump-to-divergence + session bookmarks.
+- QA via agent-browser: dev server healthy, star feature works (starred a session, no errors).
+
+Completed improvements (1 commit pushed: 3ef9c06):
+
+1. Recent sessions feed — star surface (3ef9c06):
+   - Starred sessions now show an amber star overlay (absolute-positioned) on the status icon.
+   - Starred cards get an amber border tint (border-amber-500/40) for at-a-glance identification.
+   - Uses the existing useStarredSessions hook — no new state.
+
+2. Session search — copy-link action (3ef9c06):
+   - Each search result has a Link2 icon button that copies the shareable session URL (/?s=<id>#demo) to the clipboard.
+   - Toast feedback on success ("Link copied") / error ("Couldn't copy link").
+   - stopPropagation + preventDefault so it doesn't trigger the row's onSelect (which would close the dialog + jump to replay).
+
+3. Diff view — change-type summary (3ef9c06):
+   - When sessions diverge, shows a color-coded breakdown next to the "X steps diverge" badge:
+     amber dot = N changed, emerald dot = N added, rose dot = N removed.
+   - Hidden when identical or on mobile (sm:inline-flex).
+   - Computed via useMemo from the existing rows — no new API call.
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings).
+- agent-browser: diff summary shows "5 steps diverge" + "changed" badge, copy-link button present in search, no console errors.
+
+Stage Summary:
+- Three next-phase recommendations now implemented: star in recent feed, copy-link in search, diff change summary. The dashboard is more interconnected (stars surface in multiple places) and more informative (diff breakdown).
+- 1 commit pushed to GitHub main (3ef9c06). Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- "Compare 2 sessions" quick-action from the search results (pick 2 → jump to diff tab) — still pending.
+- Search could show starred sessions at the top when query is empty.
+- The diff view could add per-step expand/collapse for long outputs.
+- Consider a "copy as JSON" action for a session's raw data.
+- The replay timeline could show a minimap of the full session for quick navigation.
