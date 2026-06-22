@@ -9,7 +9,7 @@ import type { SessionStatus, SessionStep } from "./types.js";
 
 /** SDK version (mirrored from index.ts — kept here to avoid a circular import
  *  just for the user-agent string). */
-const SDK_VERSION = "0.6.0";
+const SDK_VERSION = "0.6.1";
 
 export interface FlushPayload {
   /** Local correlation id (UUIDv4); the API assigns the canonical id. */

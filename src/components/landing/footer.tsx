@@ -1,6 +1,7 @@
 "use client";
 
 import { History } from "lucide-react";
+import { SOCIALS, GITHUB_URL, NPM_URL, PYPI_URL } from "@/lib/site-config";
 
 interface LinkDef {
   label: string;
@@ -38,18 +39,18 @@ const COLUMNS: Column[] = [
       { label: "About", href: "/#" },
       { label: "Blog", href: "/#" },
       { label: "Careers", href: "/#" },
-      { label: "Contact", href: "/#" },
+      { label: "Contact", href: "mailto:info@rioforge.com" },
       { label: "Security", href: "/#" },
     ],
   },
   {
     title: "Community",
     links: [
-      { label: "GitHub", href: "/#", external: true },
-      { label: "Discord", href: "/#", external: true },
-      { label: "r/LangChain", href: "/#", external: true },
-      { label: "X / Twitter", href: "/#", external: true },
-      { label: "YouTube", href: "/#", external: true },
+      { label: "GitHub", href: GITHUB_URL, external: true },
+      { label: "npm", href: NPM_URL, external: true },
+      { label: "PyPI", href: PYPI_URL, external: true },
+      { label: "Discord", href: SOCIALS.discord, external: true },
+      { label: "X / Twitter", href: SOCIALS.twitter, external: true },
     ],
   },
 ];
@@ -91,6 +92,9 @@ export function Footer() {
                   <li key={l.label}>
                     <a
                       href={l.href}
+                      {...(l.external
+                        ? { target: "_blank", rel: "noopener noreferrer" }
+                        : {})}
                       className="text-[12.5px] text-muted-foreground transition hover:text-foreground"
                     >
                       {l.label}
@@ -117,7 +121,14 @@ export function Footer() {
             <a href="#" className="transition hover:text-foreground">
               SOC 2
             </a>
-            <span className="font-mono">v0.4.1</span>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono transition hover:text-foreground"
+            >
+              v0.6.1
+            </a>
           </div>
         </div>
       </div>

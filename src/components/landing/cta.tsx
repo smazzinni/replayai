@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Github, Terminal } from "lucide-react";
+import { ArrowRight, Github, Star, Terminal } from "lucide-react";
 import { CodeBlock } from "@/components/replay/code-block";
+import { useGitHubStars, formatCount } from "@/hooks/use-github-stars";
+import { GITHUB_URL } from "@/lib/site-config";
 
 const INSTALL = `# 1. Install the SDK
 pip install replayai-sdk
@@ -16,6 +18,7 @@ replayai trace ./agent.py
 replayai ui  →  http://localhost:7373`;
 
 export function CTA() {
+  const { stars, loading } = useGitHubStars();
   return (
     <section id="cta" className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-grid bg-grid-fade opacity-40" />
@@ -55,11 +58,17 @@ export function CTA() {
                     <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                   </a>
                   <a
-                    href="#"
-                    className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-4 py-2.5 text-[14px] font-medium text-foreground/90 transition hover:bg-muted/40"
+                    href={GITHUB_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-4 py-2.5 text-[14px] font-medium text-foreground/90 transition hover:border-primary/40 hover:bg-muted/40"
                   >
                     <Github className="h-4 w-4" />
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
                     Star on GitHub
+                    <span className="font-mono text-[12.5px] tabular-nums text-muted-foreground">
+                      {loading ? "…" : formatCount(stars)}
+                    </span>
                   </a>
                 </div>
               </motion.div>

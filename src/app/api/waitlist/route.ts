@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendPartnerEmail } from "@/lib/mailer";
+import { PARTNER_EMAIL_TO } from "@/lib/site-config";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +85,19 @@ export async function POST(req: NextRequest) {
       where: { createdAt: { lte: entry.createdAt } },
     })) ;
 
+  // Deliver the submission to info@rioforge.com. Best-effort: the DB row is
+  // the source of truth, so a delivery hiccup never blocks the signup. In
+  // dev/preview (no SMTP creds) this no-ops and returns smtpConfigured=false.
+  const submission = {
+    email,
+    name: body.name?.trim() || null,
+    company: body.company?.trim() || null,
+    role: body.role?.trim() || null,
+    teamSize: body.teamSize || null,
+    useCase: body.useCase?.trim() || null,
+  };
+  const mail = await sendPartnerEmail(submission);
+
   return NextResponse.json(
     {
       entry,
@@ -91,6 +106,8 @@ export async function POST(req: NextRequest) {
         entry.status === "pending"
           ? `You're on the list! You're #${position} in line.`
           : `You're already ${entry.status}.`,
+      emailDelivered: mail.delivered,
+      emailRecipient: mail.delivered ? PARTNER_EMAIL_TO : undefined,
     },
     { status: 201 },
   );

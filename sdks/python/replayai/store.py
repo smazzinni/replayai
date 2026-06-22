@@ -98,7 +98,7 @@ def _build_request(
     headers = {
         "Content-Type": "application/json",
         "Accept": accept,
-        "User-Agent": "replayai-python/0.6.0",
+        "User-Agent": "replayai-python/0.6.1",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -260,8 +260,8 @@ def flush_session(session: Dict[str, Any]) -> Dict[str, Any]:
 
     Returns the parsed JSON response (typically ``{"session": {...}}``).
     In non-strict mode, ``StoreError`` is caught and logged; this is the
-    ONLY place the SDK returns ``{`` on failure — ``_do_request`` itself
-    always raises. In strict mode the error propagates.
+    ONLY place the SDK returns an empty ``{}`` on failure — ``_do_request``
+    itself always raises. In strict mode the error propagates.
     """
     cfg = _config.get_config()
     body = _build_payload(session, cfg)

@@ -22,7 +22,7 @@ from .steps import arecord_step, record_step
 from .store import StoreError, dashboard_url_for, flush_session
 from .subprocess_helper import get_session_data, session_context, set_session_data
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 __all__ = [
     "__version__",

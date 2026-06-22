@@ -1,0 +1,74 @@
+ReplayAI Website & Dashboard — Source-Available (Proprietary)
+=============================================================
+
+Copyright (c) 2026 ReplayAI, Inc. (Rioforge). All rights reserved.
+
+This LICENSE file governs the ReplayAI website and dashboard source code
+located in this repository OUTSIDE of the `sdks/` directory — i.e. everything
+under `src/`, `prisma/`, `public/`, `mini-services/`, `examples/`, `scripts/`,
+`.github/`, and the root configuration files.
+
+------------------------------------------------------------------------------
+IMPORTANT — Dual licensing
+------------------------------------------------------------------------------
+
+This repository contains TWO separately licensed bodies of work:
+
+  1. The ReplayAI SDKs (`sdks/python/` and `sdks/typescript/`) are released
+     under the MIT License. See `sdks/python/LICENSE` and
+     `sdks/typescript/LICENSE`. You may use, copy, modify, merge, publish,
+     distribute, sublicense, and/or sell copies of the SDKs under the terms
+     of the MIT License.
+
+  2. The ReplayAI website and dashboard source code (everything else in this
+     repository) is NOT open source. It is source-available under the terms
+     below. You may read, review, and run this code for your own evaluation
+     and for contributing back to the project, but you may NOT redistribute
+     it, host a competing product with it, or remove this notice.
+
+------------------------------------------------------------------------------
+Permissions granted for the website & dashboard source
+------------------------------------------------------------------------------
+
+Subject to the restrictions below, ReplayAI, Inc. grants you a limited,
+non-exclusive, non-transferable, non-sublicensable license to:
+
+  - View, inspect, and run this source code for evaluation, learning, and
+    development purposes.
+  - Submit contributions (pull requests) back to the upstream repository.
+  - Run a local development instance for your own internal use.
+
+------------------------------------------------------------------------------
+Restrictions
+------------------------------------------------------------------------------
+
+You may NOT, without prior written permission from ReplayAI, Inc.:
+
+  - Redistribute, republish, or sublicense the website/dashboard source code
+    (in whole or in part) under any license, open-source or otherwise.
+  - Use the website/dashboard source code to build, operate, or offer a
+    competing commercial product or hosted service.
+  - Remove or alter any copyright, trademark, or license notices.
+  - Use the ReplayAI name, logo, or branding without permission.
+
+------------------------------------------------------------------------------
+No Warranty
+------------------------------------------------------------------------------
+
+THE WEBSITE AND DASHBOARD SOURCE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY
+OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------------
+Contact
+------------------------------------------------------------------------------
+
+For licensing inquiries, partnership, or commercial use of the website
+source, contact: info@rioforge.com
+
+For SDK support: dev@replayai.dev
+GitHub: https://github.com/smazzinni/replayai

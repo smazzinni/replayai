@@ -2,8 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Github, History } from "lucide-react";
+import { Github, History, Star } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useGitHubStars, formatCount } from "@/hooks/use-github-stars";
+import { GITHUB_URL } from "@/lib/site-config";
 
 const NAV = [
   { label: "Demo", href: "#demo" },
@@ -13,6 +15,7 @@ const NAV = [
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
+  const { stars, loading } = useGitHubStars();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -54,11 +57,17 @@ export function Header() {
 
         <div className="ml-auto flex items-center gap-2">
           <a
-            href="#"
-            className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] text-muted-foreground transition hover:text-foreground hover:bg-muted/50 sm:inline-flex"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Star ${GITHUB_URL} on GitHub (${stars} stars)`}
+            className="hidden items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-[13px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground hover:bg-muted/50 sm:inline-flex"
           >
             <Github className="h-4 w-4" />
-            <span className="hidden lg:inline">2.1k</span>
+            <Star className="h-3 w-3 fill-current text-amber-400" />
+            <span className="hidden font-mono tabular-nums lg:inline">
+              {loading ? "…" : formatCount(stars)}
+            </span>
           </a>
           <a
             href="#demo"

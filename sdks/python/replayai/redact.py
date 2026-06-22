@@ -12,7 +12,8 @@ In addition to regex patterns, an entropy-based detector flags long
 high-entropy tokens (likely API keys, JWTs, opaque IDs) that don't match
 any whitelist pattern (UUIDs, ISO timestamps, URLs, snake_case
 identifiers). Entropy detection can be disabled by setting the
-``REDACT_STRICT=false`` environment variable.
+``REPLAYAI_REDACT_STRICT=false`` environment variable (matching the
+TypeScript SDK). The legacy ``REDACT_STRICT`` name is also honoured.
 """
 from __future__ import annotations
 
@@ -82,10 +83,16 @@ def _redaction_marker(secret_value: str) -> str:
 def _entropy_enabled() -> bool:
     """Return True if entropy-based detection is enabled (default).
 
-    Disabled only when ``REDACT_STRICT`` is explicitly one of the
-    false-y values (``false``, ``0``, ``no``, ``off``).
+    Disabled only when ``REPLAYAI_REDACT_STRICT`` is explicitly one of the
+    false-y values (``false``, ``0``, ``no``, ``off``). This env var matches
+    the TypeScript SDK's ``REPLAYAI_REDACT_STRICT`` for cross-SDK parity;
+    a legacy ``REDACT_STRICT`` (without the ``REPLAYAI_`` prefix) is still
+    honoured for backward compatibility.
     """
-    raw = os.environ.get("REDACT_STRICT")
+    raw = os.environ.get("REPLAYAI_REDACT_STRICT")
+    if raw is None or raw.strip() == "":
+        # Backward compat: older versions read the unprefixed name.
+        raw = os.environ.get("REDACT_STRICT")
     if raw is None or raw.strip() == "":
         return True
     return raw.strip().lower() not in {"false", "0", "no", "off"}

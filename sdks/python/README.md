@@ -1,5 +1,8 @@
 # `replayai` — Python SDK
 
+[![PyPI version](https://img.shields.io/pypi/v/replayai-sdk?color=blue)](https://pypi.org/project/replayai-sdk/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+
 Instrument Python agents, record every step (LLM calls, tool calls, retrievals, errors),
 and POST sessions to the ReplayAI dashboard where you can replay them, diff runs, and
 export tests.
@@ -52,9 +55,13 @@ Environment variables (all optional):
 | `REPLAYAI_TOKEN` | — | Cloud API token |
 | `REPLAYAI_STORAGE` | `cloud` | `cloud`, `local`, or `both` |
 | `REPLAYAI_API_URL` | `http://localhost:3000` | Cloud API base URL |
+| `REPLAYAI_DASHBOARD_URL` | `http://localhost:3000` | Dashboard base URL |
 | `REPLAYAI_SAMPLE_RATE` | `1.0` | Fraction of sessions to record |
 | `REPLAYAI_STRICT` | `false` | Raise on recording failures |
 | `REPLAYAI_REDACT_PATTERNS` | built-in set | Comma-separated regexes |
+| `REPLAYAI_REDACT_STRICT` | `true` | Set `false` to disable entropy-based secret detection |
+| `REPLAYAI_TIMEOUT` | `30` | Per-request HTTP timeout (seconds) |
+| `REPLAYAI_MAX_STEPS` | `200` | Hard ceiling on steps persisted per session |
 
 Programmatic override:
 
@@ -105,4 +112,4 @@ See `examples/quickstart.py` and `examples/langchain_demo.py` for runnable demos
 
 ## License
 
-MIT.
+MIT — see [LICENSE](./LICENSE).

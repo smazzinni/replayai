@@ -1,8 +1,10 @@
 """Per-model cost estimation.
 
 Rates are expressed per **1,000,000 tokens** in USD, matching the API
-endpoint's own estimator. Models unknown to the SDK estimate to zero
-(with a debug log) — callers can override cost explicitly when posting.
+endpoint's own estimator. Models not in the rate table fall back to the
+``FALLBACK_RATE`` (GPT-4o pricing) — the same behaviour as the API's own
+estimator and the TypeScript SDK. Steps without a model also use the
+fallback rate; steps without tokens contribute zero.
 """
 from __future__ import annotations
 

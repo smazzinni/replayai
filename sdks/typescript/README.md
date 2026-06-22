@@ -1,6 +1,9 @@
 # @smazzinni/sdk
 
-TypeScript SDK for [ReplayAI](https://github.com/replayai) — instrument JS/TS agents, record sessions, and replay/export them as tests.
+[![npm version](https://img.shields.io/npm/v/@smazzinni/sdk?color=blue)](https://www.npmjs.com/package/@smazzinni/sdk)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+
+TypeScript SDK for [ReplayAI](https://github.com/smazzinni/replayai) — instrument JS/TS agents, record sessions, and replay/export them as tests.
 
 - **Zero runtime deps.** Node 18+ built-ins only (`fetch`, `AsyncLocalStorage`, `crypto`).
 - **ESM + CJS** via the `exports` map.
@@ -129,7 +132,7 @@ configure({
 
 ```typescript
 import { VERSION } from "@smazzinni/sdk";
-console.log(VERSION); // "0.4.1"
+console.log(VERSION); // "0.6.1"
 ```
 
 ## Environment variables
@@ -164,4 +167,4 @@ const { trace } = require("@smazzinni/sdk");
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).

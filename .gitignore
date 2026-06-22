@@ -58,3 +58,13 @@ sdks/python/build/
 skills/
 *.html
 bun.lock
+
+# Runtime artifacts (DB, logs, screenshots, tool output)
+db/*.db
+db/*.db-journal
+/download/
+/tool-results/
+/upload/
+*.webm
+
+.zscripts/

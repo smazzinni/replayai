@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { getConfig } from "./config.js";
 /** SDK version (mirrored from index.ts — kept here to avoid a circular import
  *  just for the user-agent string). */
-const SDK_VERSION = "0.6.0";
+const SDK_VERSION = "0.6.1";
 // ---- In-memory retry queue -------------------------------------------------
 const QUEUE_MAX = 100;
 const queue = [];
