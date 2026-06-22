@@ -21,7 +21,10 @@ export interface Stats {
   totalCost: number;
   projects: number;
   failRate: number;
-  last30: { status: string; count: number }[];
+  avgDurationMs: number;
+  avgSteps: number;
+  dailyTrend: { date: string; total: number; failed: number }[];
+  costByModel: { model: string; cost: number; tokens: number; steps: number }[];
   recentIds: string[];
 }
 

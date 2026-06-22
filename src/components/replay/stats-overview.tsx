@@ -2,15 +2,17 @@
 
 import { cn } from "@/lib/utils";
 import { useStats } from "@/hooks/use-api";
-import { fmtCost } from "@/lib/replay-data";
+import { fmtCost, fmtDuration } from "@/lib/replay-data";
 import {
   Activity,
   Coins,
   Layers,
   Percent,
+  Timer,
   TriangleAlert,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 
 const STATS = [
   {
@@ -48,7 +50,37 @@ const STATS = [
     color: "text-violet-300",
     bg: "bg-violet-500/10",
   },
+  {
+    key: "avgDuration",
+    label: "Avg run",
+    icon: Timer,
+    color: "text-emerald-300",
+    bg: "bg-emerald-500/10",
+  },
 ] as const;
+
+/** Build an SVG sparkline path from the daily trend data. */
+function useSparklinePath(
+  data: { total: number }[],
+  width = 120,
+  height = 28,
+): { path: string; areaPath: string; max: number } {
+  return useMemo(() => {
+    if (data.length === 0) return { path: "", areaPath: "", max: 0 };
+    const max = Math.max(1, ...data.map((d) => d.total));
+    const stepX = data.length > 1 ? width / (data.length - 1) : width;
+    const points = data.map((d, i) => {
+      const x = i * stepX;
+      const y = height - (d.total / max) * (height - 4) - 2;
+      return [x, y] as const;
+    });
+    const path = points
+      .map(([x, y], i) => (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`))
+      .join(" ");
+    const areaPath = `${path} L ${width} ${height} L 0 ${height} Z`;
+    return { path, areaPath, max };
+  }, [data, width, height]);
+}
 
 export function StatsOverview() {
   const { data, isLoading } = useStats();
@@ -59,43 +91,151 @@ export function StatsOverview() {
     steps: data ? String(data.totalSteps) : "—",
     cost: data ? fmtCost(data.totalCost) : "—",
     failrate: data ? `${data.failRate.toFixed(0)}%` : "—",
+    avgDuration: data ? fmtDuration(data.avgDurationMs) : "—",
   };
 
+  const trend = data?.dailyTrend ?? [];
+  const spark = useSparklinePath(trend);
+  const costByModel = data?.costByModel ?? [];
+  const maxModelCost = Math.max(0.001, ...costByModel.map((m) => m.cost));
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-      {STATS.map((s, i) => {
-        const Icon = s.icon;
-        return (
-          <motion.div
-            key={s.key}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: i * 0.04 }}
-            className="rounded-lg border border-border/50 bg-card/40 px-3 py-2"
-          >
-            <div className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded",
-                  s.bg,
+    <div className="space-y-2.5">
+      {/* Stat cards row */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {STATS.map((s, i) => {
+          const Icon = s.icon;
+          return (
+            <motion.div
+              key={s.key}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.04 }}
+              className="group relative overflow-hidden rounded-lg border border-border/50 bg-card/40 px-3 py-2 transition hover:border-border/80 hover:bg-card/60"
+            >
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded transition group-hover:scale-110",
+                    s.bg,
+                  )}
+                >
+                  <Icon className={cn("h-3 w-3", s.color)} />
+                </span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {s.label}
+                </span>
+              </div>
+              <div className="mt-1 font-mono text-[16px] font-semibold tabular-nums">
+                {isLoading ? (
+                  <span className="inline-block h-4 w-10 animate-pulse rounded bg-muted" />
+                ) : (
+                  values[s.key]
                 )}
-              >
-                <Icon className={cn("h-3 w-3", s.color)} />
-              </span>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {s.label}
-              </span>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Sparkline + cost-by-model row */}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {/* 14-day trend sparkline */}
+        <div className="rounded-lg border border-border/50 bg-card/30 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              14-day activity
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground/70">
+              {trend.reduce((a, d) => a + d.total, 0)} sessions
+            </span>
+          </div>
+          {isLoading ? (
+            <div className="h-7 w-full animate-pulse rounded bg-muted/40" />
+          ) : trend.length > 0 && spark.path ? (
+            <svg
+              viewBox="0 0 120 28"
+              preserveAspectRatio="none"
+              className="h-7 w-full"
+            >
+              <defs>
+                <linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="oklch(0.72 0.16 162)" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="oklch(0.72 0.16 162)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={spark.areaPath} fill="url(#spark-grad)" />
+              <path
+                d={spark.path}
+                fill="none"
+                stroke="oklch(0.72 0.16 162)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {trend.map((d, i) => {
+                if (d.total === 0) return null;
+                const stepX = trend.length > 1 ? 120 / (trend.length - 1) : 120;
+                const x = i * stepX;
+                const y = 28 - (d.total / spark.max) * 24 - 2;
+                return (
+                  <circle
+                    key={i}
+                    cx={x}
+                    cy={y}
+                    r={d.failed > 0 ? 2 : 1.5}
+                    fill={d.failed > 0 ? "oklch(0.68 0.2 22)" : "oklch(0.72 0.16 162)"}
+                  />
+                );
+              })}
+            </svg>
+          ) : (
+            <div className="flex h-7 items-center text-[10px] text-muted-foreground/50">
+              No recent activity
             </div>
-            <div className="mt-1 font-mono text-[16px] font-semibold tabular-nums">
-              {isLoading ? (
-                <span className="inline-block h-4 w-10 animate-pulse rounded bg-muted" />
-              ) : (
-                values[s.key]
-              )}
+          )}
+        </div>
+
+        {/* Cost by model bar chart */}
+        <div className="rounded-lg border border-border/50 bg-card/30 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Cost by model
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground/70">
+              {fmtCost(data?.totalCost ?? 0)} total
+            </span>
+          </div>
+          {isLoading ? (
+            <div className="h-7 w-full animate-pulse rounded bg-muted/40" />
+          ) : costByModel.length > 0 ? (
+            <div className="space-y-1">
+              {costByModel.slice(0, 4).map((m) => (
+                <div key={m.model} className="flex items-center gap-2">
+                  <span className="w-16 shrink-0 truncate font-mono text-[9.5px] text-muted-foreground">
+                    {m.model}
+                  </span>
+                  <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-muted/40">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(m.cost / maxModelCost) * 100}%` }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500/60 to-amber-400"
+                    />
+                  </div>
+                  <span className="w-10 shrink-0 text-right font-mono text-[9.5px] tabular-nums text-muted-foreground">
+                    {fmtCost(m.cost)}
+                  </span>
+                </div>
+              ))}
             </div>
-          </motion.div>
-        );
-      })}
+          ) : (
+            <div className="flex h-7 items-center text-[10px] text-muted-foreground/50">
+              No model data
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
