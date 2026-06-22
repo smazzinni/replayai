@@ -9,14 +9,17 @@ import {
   type AgentSession,
 } from "@/lib/replay-data";
 import { useSession } from "@/hooks/use-api";
-import { AlertTriangle, ArrowRight, GitCompareArrows, Loader2, Minus, Plus, Zap } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronRight, GitCompareArrows, Loader2, Minus, Plus, Zap } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface DiffViewProps {
   sessions: AgentSession[];
+  presetPair?: { left: string; right: string; nonce: number } | null;
 }
 
-export function DiffView({ sessions }: DiffViewProps) {
+const COLLAPSE_THRESHOLD = 180; // chars — outputs longer than this get a "show more" toggle
+
+export function DiffView({ sessions, presetPair }: DiffViewProps) {
   const [leftId, setLeftId] = useState("");
   const [rightId, setRightId] = useState("");
   const [userTouched, setUserTouched] = useState(false);
@@ -36,6 +39,16 @@ export function DiffView({ sessions }: DiffViewProps) {
       setRightId(success?.id ?? different?.id ?? sessions[0].id);
     }
   }
+
+  // Apply external preset (from Cmd+K compare) — nonce changes each time so
+  // re-applying the same pair still triggers the update.
+  useEffect(() => {
+    if (!presetPair) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUserTouched(true);
+    setLeftId(presetPair.left);
+    setRightId(presetPair.right);
+  }, [presetPair?.nonce]);
 
   const handleLeftChange = (id: string) => { setUserTouched(true); setLeftId(id); };
   const handleRightChange = (id: string) => { setUserTouched(true); setRightId(id); };
@@ -263,6 +276,7 @@ function DiffCell({
   side: "left" | "right";
   note?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (!step) {
     return (
       <div className="flex h-full items-center gap-1.5 px-4 py-3 text-[11.5px] italic text-muted-foreground/50">
@@ -281,6 +295,10 @@ function DiffCell({
   }
   const meta = STEP_META[step.type];
   const status = STATUS_META[step.status];
+  const isLong = (step.output?.length ?? 0) > COLLAPSE_THRESHOLD;
+  const output = isLong && !expanded
+    ? `${step.output.slice(0, COLLAPSE_THRESHOLD)}…`
+    : step.output;
   return (
     <div className="px-4 py-3">
       <div className="flex items-center gap-2">
@@ -297,16 +315,37 @@ function DiffCell({
       </div>
       <div className="mt-2 space-y-1.5">
         <div>
-          <div className="text-[9.5px] uppercase tracking-wider text-muted-foreground/60">
-            Output
+          <div className="flex items-center gap-1.5 text-[9.5px] uppercase tracking-wider text-muted-foreground/60">
+            <span>Output</span>
+            {isLong && (
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                className="inline-flex items-center gap-0.5 rounded px-1 py-px text-[9px] font-medium text-primary/80 transition hover:bg-primary/10 hover:text-primary"
+                title={expanded ? "Collapse output" : "Show full output"}
+              >
+                {expanded ? (
+                  <>
+                    <ChevronDown className="h-2.5 w-2.5" /> Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronRight className="h-2.5 w-2.5" /> More
+                    <span className="opacity-60">
+                      ({step.output.length} chars)
+                    </span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
           <pre
             className={cn(
-              "scrollbar-thin mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded border border-border/50 bg-black/30 p-2 font-mono text-[11px] leading-relaxed text-foreground/85",
+              "scrollbar-thin mt-0.5 overflow-auto whitespace-pre-wrap break-words rounded border border-border/50 bg-black/30 p-2 font-mono text-[11px] leading-relaxed text-foreground/85",
+              expanded ? "max-h-96" : "max-h-28",
               kind === "changed" && "border-amber-500/40",
             )}
           >
-            {step.output}
+            {output}
           </pre>
         </div>
         {step.model && (

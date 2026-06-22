@@ -62,12 +62,14 @@ export function Header() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Star ${GITHUB_URL} on GitHub (${stars} stars)`}
-            className="hidden items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-[13px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground hover:bg-muted/50 sm:inline-flex"
+            className="group hidden items-center gap-2 rounded-md border border-border/60 bg-background/40 pl-2 pr-2.5 py-1.5 text-[13px] transition hover:border-primary/40 hover:bg-muted/50 sm:inline-flex"
           >
-            <Github className="h-4 w-4" />
-            <Star className="h-3 w-3 fill-current text-amber-400" />
-            <span className="hidden font-mono tabular-nums lg:inline">
-              {loading ? "…" : formatCount(stars)}
+            <Github className="h-4 w-4 text-muted-foreground transition group-hover:text-foreground" />
+            <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-px text-[11px] font-medium text-amber-400 transition group-hover:bg-amber-500/20">
+              <Star className="h-2.5 w-2.5 fill-current" />
+              <span className="font-mono tabular-nums">
+                {loading ? "…" : formatCount(stars)}
+              </span>
             </span>
           </a>
           <a

@@ -7,6 +7,7 @@ const STORAGE_KEY = "replayai:starred-sessions";
 /** Client-side starred-session bookmarks (persisted to localStorage). */
 export function useStarredSessions() {
   const [starred, setStarred] = useState<Set<string>>(new Set());
+  const [isReady, setIsReady] = useState(false);
 
   // Load from localStorage on mount.
   useEffect(() => {
@@ -20,6 +21,7 @@ export function useStarredSessions() {
     } catch {
       /* ignore parse errors */
     }
+    setIsReady(true);
   }, []);
 
   const persist = useCallback((next: Set<string>) => {
@@ -45,5 +47,5 @@ export function useStarredSessions() {
 
   const isStarred = useCallback((id: string) => starred.has(id), [starred]);
 
-  return { starred, isStarred, toggleStar };
+  return { starred, isStarred, toggleStar, isReady };
 }

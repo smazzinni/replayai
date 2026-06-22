@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { CodeBlock } from "@/components/replay/code-block";
 import { useEffect, useState } from "react";
+import { useMounted } from "@/hooks/use-mounted";
 
 const SNIPPET = `from replayai import trace
 
@@ -223,9 +224,14 @@ function MiniStat({
 
 /** Live "recorded Xs ago" badge — updates every second, reinforces the DVR concept. */
 function LiveRecordedBadge() {
-  // Lazy initializer: start from a random recent offset (3-8s) so it feels fresh.
-  const [seconds, setSeconds] = useState(() => 3 + Math.floor(Math.random() * 6));
+  // Use a stable placeholder on the server + first client render to avoid
+  // hydration mismatches; only start the random + interval after mount.
+  const mounted = useMounted();
+  const [seconds, setSeconds] = useState(3);
   useEffect(() => {
+    // Start from a random recent offset (3-8s) so it feels fresh on each load.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeconds(3 + Math.floor(Math.random() * 6));
     const id = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, []);
@@ -234,9 +240,12 @@ function LiveRecordedBadge() {
       ? `${seconds}s ago`
       : `${Math.floor(seconds / 60)}m ${seconds % 60}s ago`;
   return (
-    <span className="hidden items-center gap-1 font-mono text-[10px] text-muted-foreground/70 sm:inline-flex">
-      <Clock className="h-2.5 w-2.5" />
-      recorded {label}
+    <span
+      className="hidden items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary/80 sm:inline-flex"
+      suppressHydrationWarning
+    >
+      <Clock className="rec-clock h-2.5 w-2.5" />
+      {mounted ? `recorded ${label}` : "recorded just now"}
     </span>
   );
 }

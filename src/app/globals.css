@@ -175,6 +175,14 @@
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 oklch(0.68 0.2 22 / 0.55); }
     50% { opacity: 0.55; box-shadow: 0 0 0 6px oklch(0.68 0.2 22 / 0); }
   }
+  .rec-clock {
+    animation: rec-clock-tick 1s step-end infinite;
+    transform-origin: center;
+  }
+  @keyframes rec-clock-tick {
+    0%, 50% { transform: rotate(0deg); }
+    51%, 100% { transform: rotate(8deg); }
+  }
   .caret-blink {
     animation: caret 1s step-end infinite;
   }

@@ -101,6 +101,13 @@ export function Dashboard() {
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Diff pair preset from Cmd+K search "compare" action — nonce changes each
+  // time so picking the same pair twice still triggers an update.
+  const [diffPreset, setDiffPreset] = useState<{
+    left: string;
+    right: string;
+    nonce: number;
+  } | null>(null);
 
   // Keyboard shortcuts: j/k = prev/next session, 1/2/3 = tabs, ? = help.
   // Ignored when the focus is in an input/textarea/select so typing isn't hijacked.
@@ -307,7 +314,7 @@ export function Dashboard() {
             </div>
           </div>
         )}
-        {tab === "diff" && <DiffView sessions={sessions} />}
+        {tab === "diff" && <DiffView sessions={sessions} presetPair={diffPreset} />}
         {tab === "export" && <ExportView sessions={sessions} />}
       </div>
 
@@ -318,6 +325,10 @@ export function Dashboard() {
         onSelect={(id) => {
           setSelectedId(id);
           setTab("replay");
+        }}
+        onCompare={(a, b) => {
+          setDiffPreset({ left: a, right: b, nonce: Date.now() });
+          setTab("diff");
         }}
       />
 
