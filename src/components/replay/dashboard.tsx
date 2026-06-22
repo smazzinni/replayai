@@ -10,6 +10,7 @@ import {
   Keyboard,
   Layers,
   Play,
+  Search,
   SquareTerminal,
   Wifi,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { ExportView } from "./export-view";
 import { RecordSessionDialog } from "./record-session-dialog";
 import { RecentSessionsFeed } from "./recent-sessions-feed";
 import { ReplayTimeline } from "./replay-timeline";
+import { SessionSearch } from "./session-search";
 import { SessionsList } from "./sessions-list";
 import { StatsOverview } from "./stats-overview";
 
@@ -98,6 +100,7 @@ export function Dashboard() {
   }, []);
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Keyboard shortcuts: j/k = prev/next session, 1/2/3 = tabs, ? = help.
   // Ignored when the focus is in an input/textarea/select so typing isn't hijacked.
@@ -187,6 +190,16 @@ export function Dashboard() {
             <Wifi className="h-3 w-3" />
             live
           </span>
+
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2 text-[11px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+            title="Search sessions (Ctrl+K)"
+            aria-label="Search sessions"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <kbd className="hidden font-mono text-[10px] sm:inline">⌘K</kbd>
+          </button>
 
           <button
             onClick={() => setShortcutsOpen((v) => !v)}
@@ -297,6 +310,16 @@ export function Dashboard() {
         {tab === "diff" && <DiffView sessions={sessions} />}
         {tab === "export" && <ExportView sessions={sessions} />}
       </div>
+
+      {/* Session search dialog (Cmd/Ctrl+K) */}
+      <SessionSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setTab("replay");
+        }}
+      />
 
       {/* Keyboard shortcuts overlay */}
       {shortcutsOpen && (
