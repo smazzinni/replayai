@@ -651,3 +651,48 @@ Unresolved / next-phase recommendations:
 - The search could show recent searches or bookmarked sessions at the top when the query is empty.
 - Consider a "compare 2 sessions" quick-action from the search results.
 - The cost-by-model chart's per-model in/out split is now exact, but the bar chart could show a tooltip with the full breakdown on hover.
+
+---
+Task ID: webDevReview-202606222225
+Agent: main (orchestrator)
+Task: QA + implement next-phase recommendations (tooltip, shortcuts, live badge).
+
+Work Log:
+- Reviewed worklog + git state: clean. Last round added light-mode contrast fix + Cmd+K search.
+- QA via agent-browser: dev server healthy, no console errors. Verified diff/export tabs work. Noticed social proof shows live "1.6k NPM downloads / 0 PyPI downloads" — working correctly.
+
+Completed improvements (2 commits pushed: cd701f4, cfaab81):
+
+1. Cost-by-model hover tooltip (cd701f4):
+   - Each bar in the cost-by-model chart now shows a tooltip on hover with the full breakdown: model name, tokens in, tokens out, steps, and cost.
+   - Uses a CSS group-hover approach (group/model) — no extra JS state or component library.
+   - Tooltip has an arrow pointer, bordered popover style, and a highlighted cost line.
+   - Verified: claude-3.5-sonnet shows "Tokens in 10,840 | out 2,280 | 3 steps | $0.07".
+
+2. Extended keyboard shortcuts: r/d/e mnemonics (cd701f4):
+   - Added mnemonic keys: r=replay, d=diff, e=export (in addition to the existing 1/2/3).
+   - Updated the shortcuts help overlay to show both keys per tab (e.g. "1 r" = Replay tab).
+   - Added ⌘K (Search sessions) to the help overlay.
+   - Verified: d → diff tab, e → export tab, r → replay tab — all work, no errors.
+
+3. Hero live "recorded Xs ago" badge (cfaab81):
+   - New LiveRecordedBadge component in the hero terminal card header, next to REC.
+   - Updates every second to reinforce the DVR concept — the recording feels alive.
+   - Starts from a random 3-8s offset (lazy useState initializer) so each page load feels like a fresh capture.
+   - Formats as "Xs ago" under 60s, "Xm Ys ago" after. Hidden on mobile.
+   - Verified: shows "recorded 10s ago" and increments. Lint-clean (lazy initializer avoids setState-in-effect).
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings).
+- agent-browser: tooltip renders with full breakdown, d/e/r shortcuts switch tabs, live badge updates every second, no console errors.
+
+Stage Summary:
+- Three next-phase recommendations now implemented: cost-by-model tooltip, d/e/r keyboard shortcuts, live recorded badge. The dashboard is more informative (tooltips), more navigable (mnemonics), and the hero reinforces the DVR concept (live timestamp).
+- 2 commits pushed to GitHub main (cd701f4, cfaab81). Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- "Compare 2 sessions" quick-action from the search results — still pending.
+- Search could show recent/bookmarked sessions at the top when query is empty.
+- The diff view could highlight the first divergence automatically (currently manual).
+- Consider adding a session "bookmark/star" feature for pinning important sessions.
+- The export view could show a preview of the generated test code before download.
