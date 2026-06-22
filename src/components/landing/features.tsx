@@ -91,13 +91,17 @@ export function Features() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.4, delay: (i % 4) * 0.06 }}
-              className="group relative flex flex-col rounded-xl border border-border/60 bg-card/50 p-5 transition hover:border-primary/40 hover:bg-card/70"
+              className="group relative flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card/50 p-5 transition duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card/70 hover:shadow-[0_8px_30px_-12px_oklch(0.72_0.16_162/0.35)]"
             >
+              {/* gradient glow on hover */}
+              <div className="pointer-events-none absolute -inset-px -z-10 rounded-xl bg-gradient-to-br from-primary/15 via-transparent to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
               <div className="flex items-center justify-between">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/25 transition group-hover:bg-primary/15">
+                <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/25 transition duration-300 group-hover:bg-primary/15 group-hover:ring-primary/40">
                   <Icon className="h-4.5 w-4.5" />
+                  {/* icon glow */}
+                  <div className="pointer-events-none absolute inset-0 rounded-lg bg-primary/20 opacity-0 blur-md transition group-hover:opacity-100" />
                 </div>
-                <span className="rounded-full border border-border/60 px-1.5 py-px text-[9.5px] font-medium uppercase tracking-wider text-muted-foreground">
+                <span className="rounded-full border border-border/60 bg-background/40 px-1.5 py-px text-[9.5px] font-medium uppercase tracking-wider text-muted-foreground transition group-hover:border-primary/30 group-hover:text-primary/80">
                   {f.tag}
                 </span>
               </div>
@@ -113,7 +117,7 @@ export function Features() {
                     key={b}
                     className="flex items-start gap-1.5 text-[11.5px] text-muted-foreground/90"
                   >
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
+                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary/70 transition group-hover:bg-primary" />
                     {b}
                   </li>
                 ))}

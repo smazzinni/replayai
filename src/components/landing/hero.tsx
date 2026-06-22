@@ -4,9 +4,13 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   Circle,
+  Clock,
+  Coins,
+  type LucideIcon,
   Play,
   Sparkles,
   Terminal,
+  Zap,
 } from "lucide-react";
 import { CodeBlock } from "@/components/replay/code-block";
 
@@ -154,9 +158,9 @@ export function Hero() {
                 />
               </div>
               <div className="grid grid-cols-3 gap-px border-t border-border/60 bg-border/30 text-center">
-                <MiniStat value="8" label="steps" />
-                <MiniStat value="18.4s" label="duration" />
-                <MiniStat value="$0.09" label="cost" />
+                <MiniStat value="8" label="steps" icon={Sparkles} />
+                <MiniStat value="18.4s" label="duration" icon={Clock} />
+                <MiniStat value="$0.09" label="cost" icon={Coins} />
               </div>
             </div>
           </motion.div>
@@ -170,12 +174,13 @@ export function Hero() {
           className="mt-14 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y border-border/40 py-5 text-center"
         >
           {[
-            ["10×", "faster root-cause"],
-            ["$0", "to replay a run"],
-            ["100%", "deterministic"],
-            ["<1 hr", "to integrate"],
-          ].map(([v, l]) => (
-            <div key={l} className="flex items-baseline gap-1.5">
+            { v: "10×", l: "faster root-cause", icon: Zap },
+            { v: "$0", l: "to replay a run", icon: Coins },
+            { v: "100%", l: "deterministic", icon: Sparkles },
+            { v: "<1 hr", l: "to integrate", icon: Clock },
+          ].map(({ v, l, icon: Icon }) => (
+            <div key={l} className="flex items-center gap-2">
+              <Icon className="h-3.5 w-3.5 text-primary/60" />
               <span className="text-xl font-semibold text-primary">{v}</span>
               <span className="text-[12.5px] text-muted-foreground">{l}</span>
             </div>
@@ -186,11 +191,22 @@ export function Hero() {
   );
 }
 
-function MiniStat({ value, label }: { value: string; label: string }) {
+function MiniStat({
+  value,
+  label,
+  icon: Icon,
+}: {
+  value: string;
+  label: string;
+  icon: LucideIcon;
+}) {
   return (
-    <div className="bg-background/60 px-3 py-2">
-      <div className="font-mono text-[15px] font-semibold text-primary">
-        {value}
+    <div className="group bg-background/60 px-3 py-2 transition hover:bg-background/80">
+      <div className="flex items-center justify-center gap-1">
+        <Icon className="h-3 w-3 text-primary/50" />
+        <div className="font-mono text-[15px] font-semibold text-primary">
+          {value}
+        </div>
       </div>
       <div className="text-[9.5px] uppercase tracking-wider text-muted-foreground">
         {label}

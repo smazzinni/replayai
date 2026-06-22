@@ -12,6 +12,8 @@ import { Header } from "@/components/landing/header";
 import { Hero } from "@/components/landing/hero";
 import { Problem } from "@/components/landing/problem";
 import { SectionHeading } from "@/components/landing/problem";
+import { SocialProof } from "@/components/landing/social-proof";
+import { Testimonials } from "@/components/landing/testimonials";
 import { WaitlistForm } from "@/components/landing/waitlist-form";
 import { MousePointerClick } from "lucide-react";
 import { Suspense } from "react";
@@ -22,6 +24,7 @@ function Landing() {
       <Header />
       <main className="flex-1">
         <Hero />
+        <SocialProof />
         <Problem />
 
         <section
@@ -51,6 +54,8 @@ function Landing() {
         </section>
 
         <Features />
+
+        <Testimonials />
 
         {/* Design partner program */}
         <section

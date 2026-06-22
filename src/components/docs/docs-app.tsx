@@ -3,10 +3,12 @@
 import { cn } from "@/lib/utils";
 import { DOC_NAV, DOC_ORDER, DOCS } from "@/lib/docs-content";
 import { extractToc } from "@/lib/docs-utils";
+import { GITHUB_URL } from "@/lib/site-config";
 import {
   ArrowLeft,
   ChevronRight,
   Command,
+  Github,
   History,
   Search,
   X,
@@ -117,12 +119,23 @@ export function DocsApp({ initialDoc }: DocsAppProps) {
           </button>
 
           <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="View source on GitHub"
+            className="ml-auto hidden items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground sm:inline-flex"
+          >
+            <Github className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Source</span>
+          </a>
+
+          <a
             href="/"
             onClick={(e) => {
               e.preventDefault();
               backToApp();
             }}
-            className="ml-auto hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition hover:text-foreground sm:inline-flex"
+            className="hidden items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition hover:text-foreground sm:inline-flex"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to app
@@ -212,14 +225,18 @@ export function DocsApp({ initialDoc }: DocsAppProps) {
             <p className="mt-8 text-center text-[11.5px] text-muted-foreground">
               Was this page helpful?{" "}
               <a
-                href="#"
+                href={`${GITHUB_URL}/blob/main/src/lib/docs-content.ts`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-foreground underline underline-offset-2 hover:text-primary"
               >
                 Edit on GitHub
               </a>{" "}
               ·{" "}
               <a
-                href="#"
+                href={`${GITHUB_URL}/issues/new?title=Docs%20feedback%3A%20${encodeURIComponent(doc.title)}&labels=documentation`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-foreground underline underline-offset-2 hover:text-primary"
               >
                 Suggest changes
