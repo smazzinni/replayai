@@ -696,3 +696,41 @@ Unresolved / next-phase recommendations:
 - The diff view could highlight the first divergence automatically (currently manual).
 - Consider adding a session "bookmark/star" feature for pinning important sessions.
 - The export view could show a preview of the generated test code before download.
+
+---
+Task ID: webDevReview-202606222228
+Agent: main (orchestrator)
+Task: QA + implement next-phase recommendations (jump-to-divergence, bookmarks).
+
+Work Log:
+- Reviewed worklog + git state: clean. Last round added cost-by-model tooltip, d/e/r shortcuts, live recorded badge.
+- QA via agent-browser: dev server healthy, no console errors. Verified diff/export tabs work. Noted export-view already has a code preview (CodeBlock) — that recommendation was already satisfied.
+
+Completed improvements (1 commit pushed: 338dd12):
+
+1. Diff view — jump to first divergence (338dd12):
+   - "First divergence at step X" is now a clickable button (was plain text) with a Zap icon.
+   - Clicking scrolls the divergent row into view (smooth scroll, centered) via a ref + scrollIntoView.
+   - The first divergent row gets a distinctive highlight: stronger amber tint (0.08 vs 0.04) + inset ring, so it stands out from other divergent rows.
+   - Added scroll-mt-32 so the row isn't hidden under the sticky header when scrolled into view.
+
+2. Session star/bookmarks (338dd12):
+   - New useStarredSessions hook (localStorage-persisted, SSR-safe, eslint-clean).
+   - Each session card has a star toggle button: amber + filled when starred, ghosted otherwise.
+   - Star filter button in the filter row (next to All/Failed/OK) — click to show only starred sessions.
+   - Shows the starred count when > 0. No schema change needed — bookmarks are client-side.
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings).
+- agent-browser: "First divergence at step 4" button renders, "Toggle star" + "Show only starred sessions" buttons appear, no console errors.
+
+Stage Summary:
+- Diff view is now more actionable (jump-to-divergence + distinctive highlight). Sessions can be starred/bookmarked for quick access — a common request for pinning important/flaky sessions.
+- 1 commit pushed to GitHub main (338dd12). Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- "Compare 2 sessions" quick-action from the search results — still pending.
+- Search could show starred sessions at the top when query is empty.
+- The star could be surfaced in the recent sessions feed (amber icon on starred cards).
+- Consider adding a "copy session link" action to the search results.
+- The diff view could show a summary of what changed (e.g. "2 outputs differ, 1 status change").
