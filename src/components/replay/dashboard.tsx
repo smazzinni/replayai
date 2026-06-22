@@ -7,6 +7,7 @@ import {
   Circle,
   GitCompareArrows,
   History,
+  Keyboard,
   Layers,
   Play,
   SquareTerminal,
@@ -95,10 +96,49 @@ export function Dashboard() {
     setTab("replay");
   }, []);
 
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Keyboard shortcuts: j/k = prev/next session, 1/2/3 = tabs, ? = help.
+  // Ignored when the focus is in an input/textarea/select so typing isn't hijacked.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Tab switching
+      if (e.key === "1") { setTab("replay"); return; }
+      if (e.key === "2") { setTab("diff"); return; }
+      if (e.key === "3") { setTab("export"); return; }
+
+      // Help toggle
+      if (e.key === "?") { setShortcutsOpen((v) => !v); return; }
+      if (e.key === "Escape") { setShortcutsOpen(false); return; }
+
+      // Session navigation (only in replay tab)
+      if (tab !== "replay" || sessions.length === 0) return;
+      const idx = sessions.findIndex((s) => s.id === selectedId);
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = sessions[Math.min(idx + 1, sessions.length - 1)];
+        if (next) setSelectedId(next.id);
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const prev = sessions[Math.max(idx - 1, 0)];
+        if (prev) setSelectedId(prev.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab, sessions, selectedId]);
+
   const tabDesc = TABS.find((t) => t.id === tab)?.desc;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/40 backdrop-blur">
+    <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-2xl shadow-black/40 backdrop-blur">
       {/* window chrome */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-background/40 px-4 py-2.5">
         <div className="flex gap-1.5">
@@ -141,6 +181,16 @@ export function Dashboard() {
             <Wifi className="h-3 w-3" />
             live
           </span>
+
+          <button
+            onClick={() => setShortcutsOpen((v) => !v)}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background/40 px-2 text-[11px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+            <kbd className="hidden font-mono text-[10px] sm:inline">?</kbd>
+          </button>
 
           <RecordSessionDialog onRecorded={handleRecorded} />
         </div>
@@ -240,6 +290,57 @@ export function Dashboard() {
         {tab === "diff" && <DiffView sessions={sessions} />}
         {tab === "export" && <ExportView sessions={sessions} />}
       </div>
+
+      {/* Keyboard shortcuts overlay */}
+      {shortcutsOpen && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShortcutsOpen(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.18 }}
+            className="w-full max-w-sm rounded-xl border border-border/60 bg-card p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <Keyboard className="h-4 w-4 text-primary" />
+              <span className="text-[13px] font-semibold">Keyboard shortcuts</span>
+              <button
+                onClick={() => setShortcutsOpen(false)}
+                className="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Esc
+              </button>
+            </div>
+            <div className="space-y-2">
+              {[
+                { keys: ["j", "↓"], label: "Next session" },
+                { keys: ["k", "↑"], label: "Previous session" },
+                { keys: ["1"], label: "Replay tab" },
+                { keys: ["2"], label: "Diff tab" },
+                { keys: ["3"], label: "Export tab" },
+                { keys: ["?"], label: "Toggle this help" },
+              ].map((s) => (
+                <div key={s.label} className="flex items-center justify-between">
+                  <span className="text-[12px] text-muted-foreground">{s.label}</span>
+                  <div className="flex gap-1">
+                    {s.keys.map((k) => (
+                      <kbd
+                        key={k}
+                        className="rounded border border-border/60 bg-background/60 px-1.5 py-0.5 font-mono text-[10.5px] text-foreground/80"
+                      >
+                        {k}
+                      </kbd>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { RelativeTime } from "./relative-time";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowDownWideNarrow,
   CheckCircle2,
   Clock,
   Coins,
@@ -21,7 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 const STATUS_ICON: Record<
   SessionStatus,
@@ -31,6 +32,15 @@ const STATUS_ICON: Record<
   failed: { icon: XCircle, className: "text-rose-400" },
   running: { icon: Loader2, className: "text-sky-400 animate-spin" },
 };
+
+type SortKey = "recent" | "duration" | "cost" | "steps";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "recent", label: "Most recent" },
+  { value: "duration", label: "Longest first" },
+  { value: "cost", label: "Highest cost" },
+  { value: "steps", label: "Most steps" },
+];
 
 interface SessionsListProps {
   sessions: AgentSession[];
@@ -54,6 +64,7 @@ export function SessionsList({
   setStatusFilter,
 }: SessionsListProps) {
   const deleteSession = useDeleteSession();
+  const [sortBy, setSortBy] = useState<SortKey>("recent");
 
   const counts = useMemo(
     () => ({
@@ -66,7 +77,7 @@ export function SessionsList({
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return sessions.filter((s) => {
+    const out = sessions.filter((s) => {
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
       if (
         needle &&
@@ -77,7 +88,24 @@ export function SessionsList({
         return false;
       return true;
     });
-  }, [sessions, q, statusFilter]);
+    // Sort the filtered list client-side (the API already sorts by startedAt
+    // desc, but the user can re-sort here for quick exploration).
+    out.sort((a, b) => {
+      switch (sortBy) {
+        case "duration":
+          return b.durationMs - a.durationMs;
+        case "cost":
+          return b.costUsd - a.costUsd;
+        case "steps":
+          return (b.stepCount ?? b.steps.length) - (a.stepCount ?? a.steps.length);
+        default:
+          return (
+            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+          );
+      }
+    });
+    return out;
+  }, [sessions, q, statusFilter, sortBy]);
 
   const handleDelete = (e: React.MouseEvent, s: AgentSession) => {
     e.stopPropagation();
@@ -125,6 +153,22 @@ export function SessionsList({
             </button>
           ))}
         </div>
+        {/* Sort dropdown */}
+        <div className="relative mt-2">
+          <ArrowDownWideNarrow className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            className="h-7 w-full appearance-none rounded-md border border-border/60 bg-background/60 pl-7 pr-2 text-[11px] text-muted-foreground outline-none transition focus:border-primary/60 hover:text-foreground"
+            title="Sort sessions"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="scrollbar-thin flex-1 overflow-y-auto p-2">
@@ -152,7 +196,7 @@ export function SessionsList({
             </div>
           </div>
         ) : (
-          filtered.map((s) => {
+          filtered.map((s, idx) => {
             const active = s.id === selectedId;
             const meta = STATUS_ICON[s.status];
             const Icon = meta.icon;
@@ -172,7 +216,7 @@ export function SessionsList({
                 className={cn(
                   "group relative mb-1.5 w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition",
                   active
-                    ? "border-primary/50 bg-primary/10"
+                    ? "border-primary/50 bg-primary/10 shadow-[0_0_0_1px_oklch(0.72_0.16_162/0.2)]"
                     : "border-transparent hover:border-border/70 hover:bg-muted/50",
                 )}
               >
@@ -181,13 +225,18 @@ export function SessionsList({
                     className={cn("mt-0.5 h-4 w-4 shrink-0", meta.className)}
                   />
                   <div className="min-w-0 flex-1">
-                    <div
-                      className={cn(
-                        "truncate text-[12.5px] font-medium",
-                        active ? "text-foreground" : "text-foreground/90",
-                      )}
-                    >
-                      {s.name}
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[9px] text-muted-foreground/50">
+                        {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      <div
+                        className={cn(
+                          "truncate text-[12.5px] font-medium",
+                          active ? "text-foreground" : "text-foreground/90",
+                        )}
+                      >
+                        {s.name}
+                      </div>
                     </div>
                     <div className="mt-0.5 flex items-center gap-2 text-[10.5px] text-muted-foreground">
                       <span className="font-mono">{s.agent}</span>

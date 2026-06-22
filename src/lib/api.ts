@@ -62,7 +62,7 @@ export const api = {
 
   async listSessions(
     params: SessionListParams = {},
-  ): Promise<{ sessions: AgentSession[]; total: number }> {
+  ): Promise<{ sessions: AgentSession[]; total: number; hasMore: boolean }> {
     const sp = new URLSearchParams();
     if (params.projectId) sp.set("projectId", params.projectId);
     if (params.status && params.status !== "all")
