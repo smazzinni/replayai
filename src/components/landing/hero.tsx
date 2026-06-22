@@ -13,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import { CodeBlock } from "@/components/replay/code-block";
+import { useEffect, useState } from "react";
 
 const SNIPPET = `from replayai import trace
 
@@ -152,6 +153,7 @@ export function Hero() {
                   <Circle className="rec-dot h-2 w-2 fill-current" />
                   REC
                 </span>
+                <LiveRecordedBadge />
               </div>
               <div className="p-3">
                 <CodeBlock
@@ -216,5 +218,25 @@ function MiniStat({
         {label}
       </div>
     </div>
+  );
+}
+
+/** Live "recorded Xs ago" badge — updates every second, reinforces the DVR concept. */
+function LiveRecordedBadge() {
+  // Lazy initializer: start from a random recent offset (3-8s) so it feels fresh.
+  const [seconds, setSeconds] = useState(() => 3 + Math.floor(Math.random() * 6));
+  useEffect(() => {
+    const id = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const label =
+    seconds < 60
+      ? `${seconds}s ago`
+      : `${Math.floor(seconds / 60)}m ${seconds % 60}s ago`;
+  return (
+    <span className="hidden items-center gap-1 font-mono text-[10px] text-muted-foreground/70 sm:inline-flex">
+      <Clock className="h-2.5 w-2.5" />
+      recorded {label}
+    </span>
   );
 }
