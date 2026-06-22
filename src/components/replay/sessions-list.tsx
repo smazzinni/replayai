@@ -18,11 +18,13 @@ import {
   Coins,
   Loader2,
   Search,
+  Star,
   Trash2,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMemo, useState } from "react";
+import { useStarredSessions } from "@/hooks/use-starred-sessions";
 
 const STATUS_ICON: Record<
   SessionStatus,
@@ -65,6 +67,13 @@ export function SessionsList({
 }: SessionsListProps) {
   const deleteSession = useDeleteSession();
   const [sortBy, setSortBy] = useState<SortKey>("recent");
+  const [starredOnly, setStarredOnly] = useState(false);
+  const { isStarred, toggleStar } = useStarredSessions();
+
+  const starredCount = useMemo(
+    () => sessions.filter((s) => isStarred(s.id)).length,
+    [sessions, isStarred],
+  );
 
   const counts = useMemo(
     () => ({
@@ -78,6 +87,7 @@ export function SessionsList({
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const out = sessions.filter((s) => {
+      if (starredOnly && !isStarred(s.id)) return false;
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
       if (
         needle &&
@@ -105,7 +115,7 @@ export function SessionsList({
       }
     });
     return out;
-  }, [sessions, q, statusFilter, sortBy]);
+  }, [sessions, q, statusFilter, sortBy, starredOnly, isStarred]);
 
   const handleDelete = (e: React.MouseEvent, s: AgentSession) => {
     e.stopPropagation();
@@ -152,6 +162,19 @@ export function SessionsList({
                   : `OK (${counts.success})`}
             </button>
           ))}
+          <button
+            onClick={() => setStarredOnly((v) => !v)}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition",
+              starredOnly
+                ? "bg-amber-500/15 text-amber-400"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+            )}
+            title="Show only starred sessions"
+          >
+            <Star className={cn("h-3 w-3", starredOnly && "fill-current")} />
+            {starredCount > 0 && starredCount}
+          </button>
         </div>
         {/* Sort dropdown */}
         <div className="relative mt-2">
@@ -263,6 +286,24 @@ export function SessionsList({
                       ))}
                     </div>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStar(s.id);
+                    }}
+                    className={cn(
+                      "transition hover:text-amber-400",
+                      isStarred(s.id)
+                        ? "text-amber-400"
+                        : "text-muted-foreground/40 opacity-0 group-hover:opacity-100",
+                    )}
+                    title={isStarred(s.id) ? "Unstar session" : "Star session"}
+                    aria-label="Toggle star"
+                  >
+                    <Star
+                      className={cn("h-3.5 w-3.5", isStarred(s.id) && "fill-current")}
+                    />
+                  </button>
                   <button
                     onClick={(e) => handleDelete(e, s)}
                     disabled={deleteSession.isPending}

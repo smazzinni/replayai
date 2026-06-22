@@ -9,8 +9,8 @@ import {
   type AgentSession,
 } from "@/lib/replay-data";
 import { useSession } from "@/hooks/use-api";
-import { AlertTriangle, ArrowRight, GitCompareArrows, Loader2, Minus, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, GitCompareArrows, Loader2, Minus, Plus, Zap } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
 interface DiffViewProps {
   sessions: AgentSession[];
@@ -54,6 +54,11 @@ export function DiffView({ sessions }: DiffViewProps) {
   const divergeIdx = rows.findIndex((r) => r.kind !== "same");
   const divergeCount = rows.filter((r) => r.kind !== "same").length;
   const loading = leftQ.isLoading || rightQ.isLoading;
+  const divergeRef = useRef<HTMLDivElement>(null);
+
+  const jumpToDivergence = () => {
+    divergeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -117,12 +122,14 @@ export function DiffView({ sessions }: DiffViewProps) {
                 : `${divergeCount} step${divergeCount > 1 ? "s" : ""} diverge`}
             </span>
             {divergeIdx >= 0 && (
-              <span className="text-muted-foreground">
-                First divergence at{" "}
-                <span className="font-mono text-foreground/90">
-                  step {divergeIdx + 1}
-                </span>
-              </span>
+              <button
+                onClick={jumpToDivergence}
+                className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10.5px] font-medium text-amber-300 transition hover:bg-amber-500/20"
+                title="Scroll to the first divergent step"
+              >
+                <Zap className="h-3 w-3" />
+                First divergence at step {divergeIdx + 1}
+              </button>
             )}
           </div>
         )}
@@ -152,12 +159,15 @@ export function DiffView({ sessions }: DiffViewProps) {
               const l = row.left;
               const r = row.right;
               const highlight = row.kind !== "same";
+              const isFirstDivergence = i === divergeIdx;
               return (
                 <div
                   key={i}
+                  ref={isFirstDivergence ? divergeRef : undefined}
                   className={cn(
-                    "grid grid-cols-2 border-b border-border/40",
+                    "grid grid-cols-2 border-b border-border/40 scroll-mt-32",
                     highlight && "bg-amber-500/[0.04]",
+                    isFirstDivergence && "bg-amber-500/[0.08] ring-1 ring-inset ring-amber-500/30",
                   )}
                 >
                   <DiffCell
