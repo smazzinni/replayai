@@ -437,3 +437,21 @@ Unresolved / next-phase recommendations:
 - Set GITHUB_TOKEN in Vercel env so /api/github avoids the 60 req/hour unauthenticated rate limit.
 - The repo currently has 0 GitHub stars — the UI correctly shows "0". As stars grow, the formatCount helper (943, 1.2k, 1.5M) will render them.
 - Optional: add a Discord/Twitter/YouTube real link when those accounts exist (currently placeholders).
+
+---
+Task ID: 0 (Vercel deploy fix)
+Agent: main (orchestrator)
+Task: Diagnose and fix the failed Vercel production deployment (commit 82dd2dc / 0516b0a).
+
+Work Log:
+- Checked GitHub deployments API: commit a14d3d4 (pre-mine) succeeded; my commits 82dd2dc + 0516b0a both FAILED on Vercel Production.
+- Reproduced the Vercel build environment locally: clean `npm install` (no bun.lock — it's gitignored, so Vercel uses npm) + `next build`.
+- Root cause: nodemailer@9.0.1 conflicts with next-auth@4.24.14's peerOptional "nodemailer@^7.0.7". npm enforces peer deps strictly (ERESOLVE) and aborts the install; bun (used locally) is lenient so dev worked. The Vercel build never got past `npm install`.
+- Fix: downgraded nodemailer to ^7.0.7 (the version next-auth expects). The mailer API surface (createTransport + sendMail) is identical in v7/v9, so src/lib/mailer.ts needed no changes.
+- Verified: clean `npm install` now exits 0; `npx next build` exits 0; dev server healthy; partner form still works (graceful DB-only without SMTP).
+- Committed (2a282b6) + pushed. Vercel deployment 5147391544 → state=success ("Deployment has completed").
+- Confirmed production site replayai-six.vercel.app returns HTTP 200, correct title, no console errors, GitHub stars link + footer links render (verified via agent-browser).
+
+Stage Summary:
+- Vercel Production deployment is FIXED and live. The failure was a npm peer-dependency conflict (nodemailer v9 vs next-auth v4's peerOptional v7), not a code or build-script issue.
+- Lesson for future dependency additions: since bun.lock is gitignored, Vercel resolves via npm — always check `npm install` (not just `bun install`) succeeds before pushing, especially for packages with peer deps.
