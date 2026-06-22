@@ -51,31 +51,31 @@
   --card-foreground: oklch(0.18 0.02 160);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.02 160);
-  --primary: oklch(0.62 0.15 162);
+  --primary: oklch(0.55 0.15 162);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.01 160);
+  --secondary: oklch(0.95 0.012 160);
   --secondary-foreground: oklch(0.22 0.02 160);
-  --muted: oklch(0.96 0.008 160);
-  --muted-foreground: oklch(0.5 0.02 160);
-  --accent: oklch(0.95 0.03 162);
-  --accent-foreground: oklch(0.25 0.04 162);
+  --muted: oklch(0.95 0.008 160);
+  --muted-foreground: oklch(0.42 0.02 160);
+  --accent: oklch(0.93 0.04 162);
+  --accent-foreground: oklch(0.25 0.06 162);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.01 160);
-  --input: oklch(0.9 0.01 160);
-  --ring: oklch(0.62 0.15 162);
-  --chart-1: oklch(0.62 0.15 162);
-  --chart-2: oklch(0.65 0.13 200);
-  --chart-3: oklch(0.7 0.15 145);
-  --chart-4: oklch(0.78 0.16 84);
-  --chart-5: oklch(0.68 0.2 16);
+  --border: oklch(0.86 0.012 160);
+  --input: oklch(0.86 0.012 160);
+  --ring: oklch(0.55 0.15 162);
+  --chart-1: oklch(0.55 0.15 162);
+  --chart-2: oklch(0.58 0.14 200);
+  --chart-3: oklch(0.62 0.15 145);
+  --chart-4: oklch(0.72 0.16 84);
+  --chart-5: oklch(0.6 0.21 16);
   --sidebar: oklch(0.985 0.002 160);
   --sidebar-foreground: oklch(0.18 0.02 160);
-  --sidebar-primary: oklch(0.62 0.15 162);
+  --sidebar-primary: oklch(0.55 0.15 162);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.95 0.03 162);
-  --sidebar-accent-foreground: oklch(0.25 0.04 162);
-  --sidebar-border: oklch(0.9 0.01 160);
-  --sidebar-ring: oklch(0.62 0.15 162);
+  --sidebar-accent: oklch(0.93 0.04 162);
+  --sidebar-accent-foreground: oklch(0.25 0.06 162);
+  --sidebar-border: oklch(0.86 0.012 160);
+  --sidebar-ring: oklch(0.55 0.15 162);
 }
 
 .dark {
@@ -125,9 +125,14 @@
 @layer utilities {
   .bg-grid {
     background-image:
+      linear-gradient(to right, oklch(0 0 0 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0 0 0 / 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .dark .bg-grid {
+    background-image:
       linear-gradient(to right, oklch(1 0 0 / 0.04) 1px, transparent 1px),
       linear-gradient(to bottom, oklch(1 0 0 / 0.04) 1px, transparent 1px);
-    background-size: 44px 44px;
   }
   .bg-grid-fade {
     -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 50%, transparent 100%);
@@ -138,6 +143,12 @@
   }
   .text-glow {
     text-shadow: 0 0 24px oklch(0.72 0.16 162 / 0.55);
+  }
+  .dark .text-glow {
+    text-shadow: 0 0 24px oklch(0.72 0.16 162 / 0.55);
+  }
+  :root:not(.dark) .text-glow {
+    text-shadow: 0 0 18px oklch(0.55 0.15 162 / 0.35);
   }
   .scrollbar-thin {
     scrollbar-width: thin;
