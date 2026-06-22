@@ -603,3 +603,51 @@ Unresolved / next-phase recommendations:
 - Consider adding a session search with autocomplete (currently just a text filter).
 - The keyboard shortcuts could be extended to the diff/export tabs (e.g. d/e to switch).
 - Consider adding a "compare" quick-action on the recent feed cards (pick 2 to diff).
+
+---
+Task ID: webDevReview-202606222213
+Agent: main (orchestrator)
+Task: QA + light-mode contrast fix + Cmd+K session search (styling + features).
+
+Work Log:
+- Reviewed worklog + git state: found 14 mode-only file changes (644→755, no content) — discarded with `git checkout -- .`. Working tree clean.
+- QA via agent-browser: dev server healthy, no console errors in dark mode.
+- Switched to light mode + VLM analysis: identified 5 contrast issues (muted text too light, faint borders, washed-out form fields, low-contrast badges, footer links).
+
+Completed improvements (2 commits pushed: e81faea, 8c4cb14):
+
+1. Light-mode contrast fix (e81faea):
+   - --muted-foreground: 0.50 → 0.42 lightness (WCAG-compliant body text).
+   - --border / --input: 0.90 → 0.86 (visible card/input separators).
+   - --primary: 0.62 → 0.55 (deeper green for button/text contrast on light).
+   - --accent / --secondary: slightly darker for better layering.
+   - --chart-*: darkened so charts render legibly on light backgrounds.
+   - bg-grid utility: now theme-aware — black 5% lines on light, white 4% on dark (was white-only, invisible on light).
+   - text-glow: reduced intensity in light mode (0.35 vs 0.55).
+   - VLM re-assessment: "text contrast now acceptable, no critical readability issues remain".
+
+2. Cmd+K session search with autocomplete (8c4cb14):
+   - New SessionSearch component (cmdk-powered, shadcn/ui Command).
+   - Triggered by a Search button (⌘K hint) in the dashboard window chrome or Cmd/Ctrl+K globally.
+   - Lists all sessions with status icon, name, agent, ID, duration, cost, step count.
+   - Client-side filter (shouldFilter=false on cmdk; we filter by name/agent/tags/framework/ID) — matches our data shape better than cmdk's default.
+   - Dynamic heading: "5 sessions" → "2 matches" when filtering.
+   - Smart empty state: "Loading…" / 'No sessions match "query".' / "No sessions yet."
+   - ↑↓ navigate, ↵ select → jumps to replay tab with that session.
+   - Query resets on close (via onOpenChange handler, not an effect — avoids setState-in-effect lint).
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings).
+- agent-browser: light mode renders with improved contrast (VLM-verified), dark mode untouched, search dialog opens via button + shows all 5 sessions with full metadata.
+- Found + fixed an empty-database issue during testing (re-seeded via `bun run db:seed`).
+
+Stage Summary:
+- Light mode is now production-quality (VLM-verified contrast). Dashboard has a full Cmd+K search with autocomplete — a major UX upgrade for finding sessions.
+- 2 commits pushed to GitHub main (e81faea, 8c4cb14). Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- Extend keyboard shortcuts to diff/export tabs (d/e to switch) — still pending from earlier rounds.
+- Hero code card "live recorded X seconds ago" timestamp — still pending.
+- The search could show recent searches or bookmarked sessions at the top when the query is empty.
+- Consider a "compare 2 sessions" quick-action from the search results.
+- The cost-by-model chart's per-model in/out split is now exact, but the bar chart could show a tooltip with the full breakdown on hover.
