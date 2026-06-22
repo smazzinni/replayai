@@ -1,9 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import {
   SEED_PROJECTS,
-  SEED_SESSIONS,
   SESSION_PROJECT,
+  withRecentTimestamps,
 } from "../src/lib/seed-data";
+
+const SEED_SESSIONS = withRecentTimestamps();
 
 const db = new PrismaClient();
 

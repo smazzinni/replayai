@@ -477,3 +477,26 @@ export const SESSION_PROJECT: Record<string, string> = {
   ses_4f2a: "sales-agent",
   ses_1e8c: "docs-qa",
 };
+
+/**
+ * Rewrite each seed session's `startedAt` to a recent timestamp spread across
+ * the last 14 days so the dashboard's 14-day sparkline + charts show activity
+ * immediately (instead of all sessions clumped on a single date months ago).
+ *
+ * The spread is deterministic: session[i] lands `i * 2.6 days` ago with a
+ * small hour offset, so the relative ordering is preserved and re-seeding
+ * always produces the same shape.
+ */
+export function withRecentTimestamps(): SeedSession[] {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  return SEED_SESSIONS.map((s, i) => {
+    // Spread across 13 days, newest first (index 0 = most recent).
+    const daysAgo = Math.round(i * 2.6);
+    const hourOffset = (i * 7) % 12; // 0–11h offset for variety
+    const startedAt = new Date(
+      now - daysAgo * DAY - hourOffset * 60 * 60 * 1000,
+    ).toISOString();
+    return { ...s, startedAt };
+  });
+}

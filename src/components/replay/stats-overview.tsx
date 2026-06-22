@@ -146,13 +146,23 @@ export function StatsOverview() {
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
               14-day activity
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground/70">
-              {trend.reduce((a, d) => a + d.total, 0)} sessions
-            </span>
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1 text-[9.5px] text-muted-foreground/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                ok
+              </span>
+              <span className="inline-flex items-center gap-1 text-[9.5px] text-muted-foreground/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                failed
+              </span>
+              <span className="font-mono text-[10px] text-muted-foreground/70">
+                {trend.reduce((a, d) => a + d.total, 0)}
+              </span>
+            </div>
           </div>
           {isLoading ? (
             <div className="h-7 w-full animate-pulse rounded bg-muted/40" />
-          ) : trend.length > 0 && spark.path ? (
+          ) : trend.some((d) => d.total > 0) && spark.path ? (
             <svg
               viewBox="0 0 120 28"
               preserveAspectRatio="none"
@@ -190,8 +200,9 @@ export function StatsOverview() {
               })}
             </svg>
           ) : (
-            <div className="flex h-7 items-center text-[10px] text-muted-foreground/50">
-              No recent activity
+            <div className="flex h-7 items-center justify-center gap-1.5 text-[10px] text-muted-foreground/50">
+              <span>No recent activity —</span>
+              <span className="text-primary/70">hit Record to capture a run</span>
             </div>
           )}
         </div>

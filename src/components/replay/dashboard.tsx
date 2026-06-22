@@ -162,15 +162,20 @@ export function Dashboard() {
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="h-7 max-w-[160px] rounded-md border border-border/60 bg-background/60 pl-7 pr-2 text-[11.5px] outline-none transition focus:border-primary/60"
+              className="h-7 max-w-[180px] rounded-md border border-border/60 bg-background/60 pl-7 pr-2 text-[11.5px] outline-none transition focus:border-primary/60"
               title="Filter by project"
             >
-              <option value="">All projects</option>
-              {projectsQ.data?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              <option value="">All projects ({sessions.length})</option>
+              {projectsQ.data?.map((p) => {
+                const count = sessions.filter(
+                  (s) => s.projectId === p.id,
+                ).length;
+                return (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({count})
+                  </option>
+                );
+              })}
             </select>
           </div>
 
