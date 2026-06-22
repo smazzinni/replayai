@@ -508,3 +508,50 @@ Unresolved / next-phase recommendations:
 - The cost-by-model chart uses a 3:1 out:in token ratio heuristic (the stats aggregate doesn't store per-step in/out split). For exact per-model cost, store `tokensIn`/`tokensOut` separately in the aggregate or compute at query time.
 - Consider adding a session search with autocomplete (currently just a text filter).
 - The keyboard shortcuts could be extended to the diff/export tabs (e.g., d/e to switch).
+
+---
+Task ID: webDevReview-202606221742
+Agent: main (orchestrator)
+Task: QA + continue dashboard/styling/feature improvements (mandatory: styling + features).
+
+Work Log:
+- Reviewed worklog + git state: clean, last round completed successfully (keyboard shortcuts, sort dropdown, sparkline, cost-by-model chart, session header).
+- QA via agent-browser: dev server healthy, no console errors. Tested record-session flow → new session created with "just now" timestamp, sparkline populated.
+- Identified key issue from last round's notes: seeded sessions all had Jan 14 timestamps → sparkline looked empty.
+
+Completed improvements (2 commits pushed: d3a50e6, 859f08f):
+
+1. Recent seed timestamps (d3a50e6) — fixes the empty sparkline:
+   - Added `withRecentTimestamps()` helper in seed-data.ts that spreads the 5 seed sessions across the last 14 days (deterministic: i*2.6 days ago + hour offset).
+   - prisma/seed.ts now uses it. Re-seeded → sparkline now shows 5 active days.
+   - Verified: /api/stats dailyTrend now has 5 non-zero days (2026-06-12, 14, 17, 19, 22).
+
+2. Sparkline legend + empty state (d3a50e6):
+   - Added a legend (green dot = ok, red dot = failed) next to the total count.
+   - Improved empty state: "No recent activity — hit Record to capture a run" with a primary-colored CTA instead of bare "No recent activity".
+   - Fixed render condition: `trend.some(d => d.total > 0)` instead of `trend.length > 0` (latter was always true since 14 buckets are pre-built).
+
+3. Project switcher session counts (d3a50e6):
+   - Each project option now shows its session count: "Support Agent (2)", "Research Agent (1)", etc.
+   - "All projects" shows the total count too. Widened select to 180px.
+
+4. Hero terminal card polish (859f08f):
+   - Added a second violet-accent glow layer behind the card (primary + violet gradient) for more depth.
+   - Added a gradient top-border accent line (transparent → primary → transparent).
+   - Traffic-light dots now brighten on hover.
+   - REC badge restyled as a pill with rose-tinted background.
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings).
+- agent-browser: no console errors, project counts visible in switcher, sparkline legend renders, hero terminal card renders with layered glow.
+- /api/stats: dailyTrend now has 5 active days across the 14-day window.
+
+Stage Summary:
+- Dashboard now looks alive immediately after seeding (sparkline + charts populated). Project switcher is more informative. Hero has more visual depth.
+- 2 commits pushed to GitHub main. Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- The cost-by-model chart still uses a 3:1 out:in token ratio heuristic. For exact per-model cost, store tokensIn/tokensOut separately in the stats aggregate.
+- Consider adding a "recent sessions" mini-feed below the stats (showing the last 3-4 sessions with status + time) for at-a-glance activity.
+- The hero code card could show a live "recorded X seconds ago" timestamp that updates, to reinforce the "DVR" concept.
+- Consider dark/light theme toggle (the site is dark-only currently; next-themes is installed but not wired to a toggle).
