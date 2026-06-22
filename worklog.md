@@ -555,3 +555,51 @@ Unresolved / next-phase recommendations:
 - Consider adding a "recent sessions" mini-feed below the stats (showing the last 3-4 sessions with status + time) for at-a-glance activity.
 - The hero code card could show a live "recorded X seconds ago" timestamp that updates, to reinforce the "DVR" concept.
 - Consider dark/light theme toggle (the site is dark-only currently; next-themes is installed but not wired to a toggle).
+
+---
+Task ID: webDevReview-202606221743
+Agent: main (orchestrator)
+Task: QA + implement next-phase recommendations (exact cost, theme toggle, recent feed).
+
+Work Log:
+- Reviewed worklog + git state: clean. Last round fixed the empty sparkline (recent seed timestamps), added sparkline legend, project counts, hero polish.
+- QA via agent-browser: dev server healthy, no console errors, all existing features work.
+
+Completed improvements (1 commit pushed: d519f1e):
+
+1. Exact cost-by-model (fixes the 3:1 heuristic from last round):
+   - /api/stats now tracks tokensIn and tokensOut separately per model (was combined into a single `tokens` number).
+   - Uses the shared estimateCost() from session-ingest.ts (same MODEL_RATES as the ingest path) → per-model cost is now EXACT.
+   - Verified: claude-3.5-sonnet now shows $0.067 (in=10840, out=2280) — computed from the real in/out split, not estimated.
+   - Removed the duplicated inline RATES table.
+   - Response now includes tokensIn/tokensOut per model entry (api.ts Stats type updated).
+
+2. Dark/light theme toggle:
+   - Wired next-themes ThemeProvider in providers.tsx (attribute="class", defaultTheme="dark", enableSystem=false, disableTransitionOnChange).
+   - Removed hard-coded className="dark" from <html> — next-themes manages the class.
+   - New ThemeToggle component (Sun/Moon icons, hydration-safe via the existing useMounted hook).
+   - Added to the header next to "Sign in".
+   - Verified: clicking toggles <html> class between "light" (bg lab 98%) and "dark" (bg lab 13%), no errors.
+
+3. Recent sessions mini-feed:
+   - New RecentSessionsFeed component: horizontal scroll of the 4 most-recent sessions.
+   - Each card: status icon, name, agent, relative time ("11m ago", "3d ago"), duration/cost/steps.
+   - Clicking a card selects it in the dashboard (onSelect → setSelectedId → jumps to replay tab).
+   - Shown below the StatsOverview in the dashboard stats strip.
+   - Loading skeleton + empty-state (returns null when no sessions).
+
+Verification:
+- Lint: 0 errors (2 pre-existing shadcn/ui warnings).
+- agent-browser: theme toggle works (light/dark switch verified via eval), recent feed renders with 4 sessions + relative timestamps, no console errors.
+- /api/stats: costByModel now returns exact costs with tokensIn/tokensOut.
+
+Stage Summary:
+- Three next-phase recommendations from the previous round are now implemented: exact cost-by-model, dark/light theme toggle, recent sessions feed. The dashboard is more accurate, more accessible (light mode), and more navigable (recent feed).
+- 1 commit pushed to GitHub main (d519f1e). Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- The light theme works but some components (e.g. the dashboard window chrome, code blocks) may need light-mode polish — do a visual pass in light mode.
+- The hero code card could show a live "recorded X seconds ago" timestamp that updates, reinforcing the DVR concept.
+- Consider adding a session search with autocomplete (currently just a text filter).
+- The keyboard shortcuts could be extended to the diff/export tabs (e.g. d/e to switch).
+- Consider adding a "compare" quick-action on the recent feed cards (pick 2 to diff).
