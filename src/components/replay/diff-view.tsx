@@ -53,6 +53,15 @@ export function DiffView({ sessions }: DiffViewProps) {
 
   const divergeIdx = rows.findIndex((r) => r.kind !== "same");
   const divergeCount = rows.filter((r) => r.kind !== "same").length;
+  const summary = useMemo(() => {
+    let changed = 0, added = 0, removed = 0;
+    for (const r of rows) {
+      if (r.kind === "changed") changed++;
+      else if (r.kind === "added") added++;
+      else if (r.kind === "removed") removed++;
+    }
+    return { changed, added, removed };
+  }, [rows]);
   const loading = leftQ.isLoading || rightQ.isLoading;
   const divergeRef = useRef<HTMLDivElement>(null);
 
@@ -121,6 +130,29 @@ export function DiffView({ sessions }: DiffViewProps) {
                 ? "Identical behavior"
                 : `${divergeCount} step${divergeCount > 1 ? "s" : ""} diverge`}
             </span>
+            {/* Change-type breakdown */}
+            {divergeCount > 0 && (
+              <span className="hidden items-center gap-1.5 text-[10px] text-muted-foreground sm:inline-flex">
+                {summary.changed > 0 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                    {summary.changed} changed
+                  </span>
+                )}
+                {summary.added > 0 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    {summary.added} added
+                  </span>
+                )}
+                {summary.removed > 0 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                    {summary.removed} removed
+                  </span>
+                )}
+              </span>
+            )}
             {divergeIdx >= 0 && (
               <button
                 onClick={jumpToDivergence}

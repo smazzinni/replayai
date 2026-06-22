@@ -15,11 +15,13 @@ import {
   CheckCircle2,
   Clock,
   Coins,
+  Link2,
   Loader2,
   Search,
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 const STATUS_ICON: Record<
   SessionStatus,
@@ -144,6 +146,28 @@ export function SessionSearch({
                           {fmtCost(s.costUsd)}
                         </span>
                         <span>{stepN} steps</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const url = `${window.location.origin}/?s=${s.id}#demo`;
+                            navigator.clipboard
+                              .writeText(url)
+                              .then(() => {
+                                toast.success("Link copied", {
+                                  description: "Shareable session link in your clipboard.",
+                                });
+                              })
+                              .catch(() => {
+                                toast.error("Couldn't copy link");
+                              });
+                          }}
+                          className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 transition hover:bg-muted hover:text-primary"
+                          title="Copy shareable link"
+                          aria-label="Copy session link"
+                        >
+                          <Link2 className="h-3 w-3" />
+                        </button>
                       </div>
                     </CommandItem>
                   );

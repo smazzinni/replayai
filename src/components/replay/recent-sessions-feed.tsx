@@ -11,8 +11,10 @@ import {
   Clock,
   Coins,
   Loader2,
+  Star,
   XCircle,
 } from "lucide-react";
+import { useStarredSessions } from "@/hooks/use-starred-sessions";
 
 const STATUS_ICON: Record<
   SessionStatus,
@@ -31,6 +33,7 @@ interface RecentSessionsFeedProps {
 /** Compact horizontal feed of the 4 most-recent sessions, shown below the stats strip. */
 export function RecentSessionsFeed({ onSelect }: RecentSessionsFeedProps) {
   const { data, isLoading } = useSessions({ limit: 4 });
+  const { isStarred } = useStarredSessions();
 
   const sessions = data?.sessions ?? [];
 
@@ -57,6 +60,7 @@ export function RecentSessionsFeed({ onSelect }: RecentSessionsFeedProps) {
         const meta = STATUS_ICON[s.status];
         const Icon = meta.icon;
         const stepN = s.stepCount ?? s.steps.length;
+        const starred = isStarred(s.id);
         return (
           <motion.button
             key={s.id}
@@ -64,9 +68,17 @@ export function RecentSessionsFeed({ onSelect }: RecentSessionsFeedProps) {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.25, delay: i * 0.05 }}
             onClick={() => onSelect?.(s.id)}
-            className="group flex min-w-[200px] flex-1 items-center gap-2.5 rounded-lg border border-border/50 bg-card/40 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-card/70"
+            className={cn(
+              "group relative flex min-w-[200px] flex-1 items-center gap-2.5 rounded-lg border bg-card/40 px-3 py-2 text-left transition hover:border-primary/40 hover:bg-card/70",
+              starred ? "border-amber-500/40" : "border-border/50",
+            )}
           >
-            <Icon className={cn("h-4 w-4 shrink-0", meta.className)} />
+            <div className="relative shrink-0">
+              <Icon className={cn("h-4 w-4", meta.className)} />
+              {starred && (
+                <Star className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[11.5px] font-medium text-foreground/90">
                 {s.name}
