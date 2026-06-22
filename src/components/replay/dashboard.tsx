@@ -113,10 +113,10 @@ export function Dashboard() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      // Tab switching
-      if (e.key === "1") { setTab("replay"); return; }
-      if (e.key === "2") { setTab("diff"); return; }
-      if (e.key === "3") { setTab("export"); return; }
+      // Tab switching (1/2/3 or r/d/e mnemonics)
+      if (e.key === "1" || e.key === "r") { setTab("replay"); return; }
+      if (e.key === "2" || e.key === "d") { setTab("diff"); return; }
+      if (e.key === "3" || e.key === "e") { setTab("export"); return; }
 
       // Help toggle
       if (e.key === "?") { setShortcutsOpen((v) => !v); return; }
@@ -348,9 +348,10 @@ export function Dashboard() {
               {[
                 { keys: ["j", "↓"], label: "Next session" },
                 { keys: ["k", "↑"], label: "Previous session" },
-                { keys: ["1"], label: "Replay tab" },
-                { keys: ["2"], label: "Diff tab" },
-                { keys: ["3"], label: "Export tab" },
+                { keys: ["1", "r"], label: "Replay tab" },
+                { keys: ["2", "d"], label: "Diff tab" },
+                { keys: ["3", "e"], label: "Export tab" },
+                { keys: ["⌘K"], label: "Search sessions" },
                 { keys: ["?"], label: "Toggle this help" },
               ].map((s) => (
                 <div key={s.label} className="flex items-center justify-between">

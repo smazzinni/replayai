@@ -222,7 +222,10 @@ export function StatsOverview() {
           ) : costByModel.length > 0 ? (
             <div className="space-y-1">
               {costByModel.slice(0, 4).map((m) => (
-                <div key={m.model} className="flex items-center gap-2">
+                <div
+                  key={m.model}
+                  className="group/model relative flex items-center gap-2"
+                >
                   <span className="w-16 shrink-0 truncate font-mono text-[9.5px] text-muted-foreground">
                     {m.model}
                   </span>
@@ -237,6 +240,42 @@ export function StatsOverview() {
                   <span className="w-10 shrink-0 text-right font-mono text-[9.5px] tabular-nums text-muted-foreground">
                     {fmtCost(m.cost)}
                   </span>
+                  {/* Hover tooltip with full breakdown */}
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 hidden -translate-x-1/2 group-hover/model:block">
+                    <div className="whitespace-nowrap rounded-md border border-border/60 bg-popover px-2.5 py-1.5 text-[10px] shadow-lg">
+                      <div className="mb-1 font-mono font-semibold text-foreground">
+                        {m.model}
+                      </div>
+                      <div className="space-y-0.5 text-muted-foreground">
+                        <div className="flex justify-between gap-3">
+                          <span>Tokens in</span>
+                          <span className="font-mono tabular-nums text-foreground/80">
+                            {(m.tokensIn ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span>Tokens out</span>
+                          <span className="font-mono tabular-nums text-foreground/80">
+                            {(m.tokensOut ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span>Steps</span>
+                          <span className="font-mono tabular-nums text-foreground/80">
+                            {m.steps}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex justify-between gap-3 border-t border-border/40 pt-0.5">
+                          <span>Cost</span>
+                          <span className="font-mono tabular-nums text-amber-400">
+                            {fmtCost(m.cost)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* arrow */}
+                    <div className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-border/60" />
+                  </div>
                 </div>
               ))}
             </div>
