@@ -403,3 +403,37 @@ Verification:
 Stage Summary:
 - All 8 files modified per spec. Zero runtime dependencies added (only `node:crypto`, `node:async_hooks`, both already in use). Backward compatibility preserved: `run()` still works (deprecated), `mock(name, response)` still works (options optional).
 - Build is green for both ESM (`dist/`) and CJS (`dist/cjs/`). VERSION reports `0.6.0`. All P0–P2 issues addressed: AbortController timeout, retry+backoff, in-memory queue, payload size check, always-enter-ALS, isSampled export, recordStep-outside-session warning, structured exception capture with parseStackTrace, run()→load() deprecation, compare() with divergences, flexible mock matching (prefix/regex/inputContains/inputSample), entropy-based redaction with whitelist + sha256 markers, REPLAYAI_REDACT_STRICT toggle, config additions (timeoutMs/maxSteps/redactStrict).
+
+---
+Task ID: 0 (completion)
+Agent: main (orchestrator)
+Task: Finalize — all fixes applied, pushed to git/npm/PyPI, webDevReview cron created.
+
+Work Log:
+- GitHub stars: added /api/github route (live GitHub API, 5-min cache, GITHUB_TOKEN-authenticated) + use-github-stars hook + formatCount. Header + CTA now show the real star count (currently 0) and link to github.com/smazzinni/replayai. Footer GitHub/npm/PyPI links + Contact mailto + version v0.6.1 all wired to real destinations; external links open in new tabs.
+- Partner email: built src/lib/mailer.ts (nodemailer SMTP, reads SMTP_HOST/USER/PASS/FROM + PARTNER_EMAIL_TO). /api/waitlist POST now saves to DB AND sends a formatted HTML+text email to info@rioforge.com. Gracefully degrades (DB-only) when SMTP env is unset — verified end-to-end via agent-browser (form submits, "You're on the list" success, 2 entries persisted).
+- License split: sdks/python/LICENSE + sdks/typescript/LICENSE = MIT (copyright ReplayAI, Inc.); root LICENSE = source-available proprietary notice for the website/dashboard. Root README documents the dual-license. SDK READMEs link their LICENSE files.
+- SDK audit fixes (v0.6.0 → v0.6.1):
+  - Python redact.py: REDACT_STRICT → REPLAYAI_REDACT_STRICT (cross-SDK parity; legacy name still honoured for backward compat).
+  - Python cost.py: fixed docstring (unknown models use fallback rate, not zero).
+  - Python store.py: fixed broken docstring (empty {} on failure).
+  - TS README: fixed stale VERSION example (0.4.1 → 0.6.1) + broken github.com/replayai org link → real repo.
+  - Python README: added REPLAYAI_REDACT_STRICT/REPLAYAI_TIMEOUT/REPLAYAI_MAX_STEPS/DASHBOARD_URL to env-var table + badges + license link.
+- Repo hygiene: gitignore + untrack db/custom.db, tool-results/, added download/, upload/, *.webm, .zscripts/.
+- Publishing:
+  - GitHub: 2 commits pushed to smazzinni/replayai main (82dd2dc, 0516b0a).
+  - npm: @smazzinni/sdk@0.6.1 published (verified: registry returns 0.6.1, MIT, owner smazzinni).
+  - PyPI: replayai-sdk@0.6.1 published (verified: pypi.org/project/replayai-sdk/0.6.1, MIT, >=3.9). LICENSE included in wheel.
+- Cron: created webDevReview job (id 224569, fixed_rate 900s / 15 min) for ongoing QA + feature work.
+- Security: .npmrc (npm token) removed after publish; .env (with GITHUB_TOKEN + SMTP placeholder) is gitignored and not tracked.
+
+Stage Summary:
+- All 5 user requirements met: (1) repo issues fixed + SDKs audited/fixed, (2) partner form → info@rioforge.com, (3) MIT only for SDKs (website proprietary), (4) live GitHub stars + real repo links, (5) pushed to git + npm + PyPI. App functionality unchanged (added features, didn't alter existing behaviour).
+- Dev server healthy on :3000 (GET /, /api/github, /api/waitlist all 200). agent-browser verified: page renders, header stars, partner form submission, footer links, mobile responsiveness.
+- 15-min webDevReview cron active for continued QA + feature development.
+
+Unresolved / next-phase recommendations:
+- Configure real SMTP creds (SMTP_HOST/USER/PASS) in the Vercel project env so the partner form actually delivers email in production (code is ready; currently degrades to DB-only without creds).
+- Set GITHUB_TOKEN in Vercel env so /api/github avoids the 60 req/hour unauthenticated rate limit.
+- The repo currently has 0 GitHub stars — the UI correctly shows "0". As stars grow, the formatCount helper (943, 1.2k, 1.5M) will render them.
+- Optional: add a Discord/Twitter/YouTube real link when those accounts exist (currently placeholders).
