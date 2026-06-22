@@ -836,3 +836,55 @@ Unresolved / next-phase recommendations:
 - The search dialog could show recent searches when the query is empty (in addition to starred).
 - Consider a "share diff" link that encodes the A+B pair in the URL (currently only single-session share links exist).
 - The expand/collapse threshold (180) is tuned for demo; consider raising to 240–300 once real SDK-recorded sessions with long LLM outputs are common.
+
+---
+Task ID: sdk-v0.7.0
+Agent: main (orchestrator)
+Task: Fix `replayai ui` to launch a working dashboard for both Python + TypeScript SDKs. User reported that `replayai ui` didn't actually launch a dashboard (PyPI users have no Next.js app). Also fix the Windows PATH warning for the Python `replayai` script.
+
+Work Log:
+- Reviewed both SDKs: the Python `cli._cmd_ui()` was looking for `node_modules/.bin/next` (doesn't exist for PyPI users → just printed a message and exited). The TypeScript SDK had NO CLI binary at all (no `bin` field in package.json).
+- Built a self-contained dashboard server for both SDKs that reads locally-stored sessions and serves a complete single-page UI + JSON API. Zero external dependencies (Python: stdlib http.server; TS: node:http).
+
+Python SDK (0.6.1 → 0.7.0):
+- New `replayai/local_store.py`: file-based session persistence. Sessions saved as JSON to `{storage_path}/sessions/{id}.json` with clean IDs (`ses_<slug>_<timestamp>`).
+- New `replayai/dashboard_server.py`: stdlib-only HTTP server. Serves:
+  - `GET /` → embedded single-page HTML dashboard (stats cards, sessions list, step timeline with input/output)
+  - `GET /api/sessions` → JSON session list
+  - `GET /api/sessions/:id` → JSON single session with steps
+  - `GET /api/stats` → JSON aggregate stats
+  - `GET /health` → JSON health check
+  Auto-opens browser (use `--no-browser` to disable).
+- New `replayai/__main__.py`: enables `python -m replayai ui` — avoids the Windows PATH warning entirely.
+- Fixed `context._local_persist()`: now uses `local_store.save_session()` (clean IDs + sessions/ subdirectory).
+- Fixed `cli._cmd_ui()`: now launches the bundled dashboard server instead of looking for `next dev`.
+- Updated `pyproject.toml`: version 0.7.0, added Python 3.13 classifier.
+- Updated README: dashboard launch instructions, Windows PATH note, CLI commands table.
+
+TypeScript SDK (0.6.1 → 0.7.0):
+- New `src/local-store.ts`: file-based session persistence (same JSON format as Python SDK for cross-SDK parity).
+- New `src/dashboard-server.ts`: Node http-based dashboard server (same HTML/JSON API as Python SDK).
+- New `src/cli.ts`: CLI entry point with `ui`, `version`, `help` commands.
+- New `package.json` `bin` field: `replayai` is now a real CLI binary (`npx replayai ui` works).
+- Fixed `context.ts endAndFlush()`: now persists locally when `storage` includes `local` (was cloud-only — local mode did nothing).
+- Updated VERSION + SDK_VERSION to 0.7.0.
+- Updated README: dashboard launch instructions, CLI commands, env-var table.
+
+Verification:
+- Python wheel built + installed locally → `python -m replayai ui` launches dashboard at :7373, shows recorded sessions with step timelines (VLM-verified via agent-browser).
+- TypeScript dist built → `node dist/cli.js ui` launches dashboard at :7373, shows recorded sessions.
+- Both SDKs tested end-to-end: record session → launch ui → view in browser.
+- `python -m replayai` works as an alternative to `replayai` (avoids Windows PATH warning).
+- Next.js app (port 3000) still works — no regressions.
+
+Stage Summary:
+- `replayai ui` now launches a REAL dashboard server for both npm and PyPI users — no external app or database required.
+- Both SDKs bumped to v0.7.0. Code committed (beac59b) + pushed to GitHub main.
+- Python wheel + sdist built (`dist/replayai_sdk-0.7.0-py3-none-any.whl` + `.tar.gz`). TS dist built.
+- PENDING: npm + PyPI publish requires tokens (removed after previous publish for security; not available in this session).
+
+Unresolved / next-phase recommendations:
+- Need npm + PyPI tokens to publish v0.7.0 to the registries. The packages are built and tested — just need `npm publish` and `twine upload`.
+- After publish: update the website's "install" commands to mention `replayai ui` for launching the dashboard.
+- Consider adding a `replayai record <script>` equivalent to the TypeScript SDK (currently Python-only).
+- The dashboard server auto-refreshes every 5s; consider adding WebSocket support for instant updates.
