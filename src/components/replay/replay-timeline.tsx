@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import {
+  fmtCost,
   fmtDuration,
   fmtOffset,
   STEP_META,
@@ -14,6 +15,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  Coins,
   Download,
   FastForward,
   Link2,
@@ -171,10 +173,28 @@ export function ReplayTimeline({ session, isLoading }: ReplayTimelineProps) {
               <span className="opacity-40">·</span>
               <span>{session.tokenTotal.toLocaleString()} tok</span>
               <span className="opacity-40">·</span>
+              <span className="inline-flex items-center gap-0.5">
+                <Coins className="h-3 w-3" />
+                {fmtCost(session.costUsd)}
+              </span>
+              <span className="opacity-40">·</span>
               <span>
                 {fmtOffset(session.durationMs).replace("+", "ended +")}
               </span>
             </div>
+            {/* Tags */}
+            {session.tags.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {session.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded bg-muted/60 px-1.5 py-px font-mono text-[9.5px] uppercase tracking-wide text-muted-foreground"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
