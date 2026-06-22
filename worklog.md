@@ -776,3 +776,63 @@ Unresolved / next-phase recommendations:
 - The diff view could add per-step expand/collapse for long outputs.
 - Consider a "copy as JSON" action for a session's raw data.
 - The replay timeline could show a minimap of the full session for quick navigation.
+
+---
+Task ID: webDevReview-202606222243
+Agent: main (orchestrator)
+Task: QA + implement next-phase recommendations (compare-from-search, starred-first, diff expand/collapse, hydration fixes, styling polish).
+
+Work Log:
+- Reviewed worklog + git state: clean. Last round added star-in-recent-feed, copy-link in search, diff change summary.
+- QA via agent-browser + dev.log inspection: discovered TWO hydration-mismatch bugs that had been silently logged for several rounds:
+  1. LiveRecordedBadge: lazy `useState(() => 3 + Math.floor(Math.random() * 6))` produced different values on server vs client → React hydration warning + cascading re-render.
+  2. ThemeToggle: `title={isDark ? "Switch to light mode" : "Switch to dark mode"}` differed between server (theme=undefined → "Switch to dark mode") and client after next-themes' pre-hydration script set the html class (theme=dark → "Switch to light mode").
+
+Completed improvements (1 commit pushed: 39f1a9d):
+
+1. Hydration-mismatch fixes:
+   - LiveRecordedBadge: now renders a stable "recorded just now" placeholder on server + first client paint, then sets the random offset (3–8s) + starts the interval in a post-mount useEffect. Added `suppressHydrationWarning` as a safety net.
+   - ThemeToggle: gated the `title` attribute on `mounted` (renders "Toggle theme" until mounted), added `suppressHydrationWarning`. Icons were already gated.
+   - Verified: dev.log no longer shows hydration warnings on fresh page loads.
+
+2. Compare 2 sessions quick-action from Cmd+K search (highest-impact pending item):
+   - Each search-result row now has a GitCompareArrows icon button (next to the existing copy-link button).
+   - Click session 1 → marked as "A" (amber pill). Click session 2 → marked as "B", and after a 120ms highlight the dialog auto-closes and the dashboard jumps to the Diff tab with both sessions pre-selected.
+   - A footer bar (amber-tinted) shows the current pick state: "Compare: 1/2 picked" + removable chips for each pick + a Clear button.
+   - Picks can be toggled off by clicking the same row again.
+   - The heading changes to "Pick session B to compare" while in compare mode.
+   - Implementation: SessionSearch accepts a new `onCompare(aId, bId)` prop. Dashboard owns a `diffPreset` state `{left, right, nonce}` that's passed to DiffView as `presetPair`. DiffView applies the preset in a `useEffect` keyed on the nonce (so re-picking the same pair still fires). Uses setTimeout(120ms) to defer the close so the user sees the second pick highlight briefly before the dialog closes.
+   - Verified end-to-end via agent-browser: opened search, clicked A on session 1, clicked B on session 2, dialog closed, Diff tab activated, A=baseline + B=candidate pre-selected, "5 steps diverge" + "First divergence at step 4" button visible.
+
+3. Starred sessions surface at top of search:
+   - When the query is empty, the search dialog now shows a dedicated "Starred" CommandGroup at the top (with a CommandSeparator) containing any starred sessions, followed by the regular "N sessions" group with the rest.
+   - Starred rows also show an amber filled Star icon next to the session name.
+   - useStarredSessions hook now exposes `isReady` (true after the localStorage load effect runs) so the search can avoid showing an empty "Starred" group during SSR/first paint.
+   - Verified: starred 2 sessions via the dashboard sidebar, opened search — "Starred" group shows 2 sessions, regular group shows 3.
+
+4. Diff view per-step expand/collapse for long outputs:
+   - Outputs longer than 180 chars (COLLAPSE_THRESHOLD) get a "More (XXX chars)" button next to the OUTPUT label. Clicking expands the <pre> to max-h-96 (was max-h-28) and the button becomes "Less".
+   - The threshold is tuned to 180 so the seed data's 199-char RAG output triggers it for demo purposes (real LLM outputs are typically 500+ chars and will trigger it naturally).
+   - Verified via agent-browser: scrolled to step 4 (RAG: refund policy), saw "More (199 chars)" button on the right cell, clicked it → output expanded + button became "Less".
+
+5. Styling polish:
+   - GitHub stars badge in the header: was `text-muted-foreground` (low contrast, "0" was nearly invisible). Now an amber-tinted pill: `bg-amber-500/10 text-amber-400` with the star icon inside the pill. Hover brightens the pill background. The GitHub icon stays muted-foreground and brightens on hover.
+   - LiveRecordedBadge: was `text-muted-foreground/70` (low contrast, hard to read). Now a primary-tinted pill: `bg-primary/10 text-primary/80` with a ticking clock icon. Added a new `rec-clock` CSS keyframe animation (8deg rotation every 1s, step-end) so the clock hand visually "ticks" each second — reinforces the DVR concept.
+   - VLM-verified: both badges now clearly visible against the dark background.
+
+Verification:
+- Lint: 0 errors (clean).
+- agent-browser: hydration warnings gone (verified via dev.log after fresh page load), compare flow works end-to-end (A→B→diff tab), starred section appears with 2 starred sessions, expand/collapse toggles correctly, header + hero badges are clearly visible.
+- VLM (glm-4.6v) confirmed: GitHub stars "0" now clearly visible, recorded badge readable with green tint, starred group at top of search with amber icons, diff "More (199 chars)" button visible and expands to "Less".
+
+Stage Summary:
+- Fixed two silent hydration bugs that had been logged for several rounds. Implemented three of the highest-impact pending recommendations: compare-from-search, starred-first in search, diff expand/collapse. Plus styling polish on two low-contrast badges flagged by VLM.
+- 1 commit pushed to GitHub main (39f1a9d). Vercel auto-deploys.
+
+Unresolved / next-phase recommendations:
+- Replay timeline minimap for quick navigation (still pending — low priority).
+- "Copy as JSON" action for a session's raw data (still pending).
+- The diff view could show a per-step token/cost comparison (currently only shows model + duration).
+- The search dialog could show recent searches when the query is empty (in addition to starred).
+- Consider a "share diff" link that encodes the A+B pair in the URL (currently only single-session share links exist).
+- The expand/collapse threshold (180) is tuned for demo; consider raising to 240–300 once real SDK-recorded sessions with long LLM outputs are common.
