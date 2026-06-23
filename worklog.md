@@ -888,3 +888,51 @@ Unresolved / next-phase recommendations:
 - After publish: update the website's "install" commands to mention `replayai ui` for launching the dashboard.
 - Consider adding a `replayai record <script>` equivalent to the TypeScript SDK (currently Python-only).
 - The dashboard server auto-refreshes every 5s; consider adding WebSocket support for instant updates.
+
+---
+Task ID: sdk-v0.7.0-publish
+Agent: main (orchestrator)
+Task: Publish SDK v0.7.0 to PyPI + npm (user provided tokens).
+
+Work Log:
+- User provided fresh PyPI + npm tokens.
+- Rebuilt the Python wheel + sdist (dist/ was cleaned between sessions).
+- Published to PyPI: `twine upload dist/*` → 200 OK.
+  - https://pypi.org/project/replayai-sdk/0.7.0/
+- npm publish failed on first attempt: `prepublishOnly` script rebuilt and
+  hit two TypeScript errors:
+  1. `Cannot find module './local-store.js'` — the `local-store.ts` source
+     file was missing from the working directory (lost during a dist cleanup).
+     Recreated it with identical content (it was already committed in beac59b).
+  2. `Parameter 's' implicitly has an 'any' type` in dashboard-server.ts —
+     the `.map((s) => ...)` callback needed an explicit `LocalSession` type
+     annotation. Fixed by importing `type LocalSession` and using destructuring
+     instead of `delete` to strip steps from the list view.
+- Rebuilt dist (clean compile, 0 errors).
+- Published to npm: `npm publish --access public` → success.
+  - https://registry.npmjs.org/@smazzinni/sdk/0.7.0
+  - bin field: { replayai: 'dist/cli.js' }
+- Verified end-to-end from the actual registries:
+  - `pip install replayai-sdk==0.7.0` → `python -m replayai ui` launches dashboard ✓
+  - `npm install @smazzinni/sdk@0.7.0` → `npx replayai version` → "replayai-sdk/0.7.0" ✓
+  - `npx replayai help` shows the ui/version/help commands ✓
+  - Recorded a session locally from the registry-installed Python package →
+    saved to ./replays/sessions/ → dashboard shows it ✓
+- Committed (ac58867) + pushed to GitHub main.
+
+Stage Summary:
+- v0.7.0 is live on all three channels:
+  - GitHub: https://github.com/smazzinni/replayai (commit ac58867)
+  - PyPI: https://pypi.org/project/replayai-sdk/0.7.0/
+  - npm: https://www.npmjs.com/package/@smazzinni/sdk (v0.7.0)
+- Both SDKs now ship with a working `replayai ui` command that launches a
+  self-contained dashboard server. No external app or database required.
+- `python -m replayai` works as a Windows-PATH-safe alternative to `replayai`.
+
+Unresolved / next-phase recommendations:
+- Update the website's "install" section to mention `replayai ui` for launching
+  the dashboard.
+- Consider adding a `replayai record <script>` equivalent to the TypeScript SDK
+  (currently Python-only).
+- The dashboard server auto-refreshes every 5s; consider WebSocket support for
+  instant updates.
