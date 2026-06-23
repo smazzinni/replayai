@@ -49,12 +49,12 @@ function main() {
         process.exit(0);
     }
     if (cmd === "version" || cmd === "--version" || cmd === "-v") {
-        console.log("replayai-sdk/0.7.0");
+        console.log("replayai-sdk/0.7.1");
         process.exit(0);
     }
     if (cmd === "ui") {
         let port = 7373;
-        let storage = "./replays";
+        let storage = "./ReplayAI";
         let openBrowser = true;
         for (let i = 1; i < args.length; i++) {
             const a = args[i];

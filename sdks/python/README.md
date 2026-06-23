@@ -53,11 +53,11 @@ handle_support_ticket("I was charged twice, refund me.")
 
 ## Launching the dashboard
 
-The SDK ships with a self-contained dashboard server. Record sessions locally, then launch the UI to view them:
+The SDK ships with a self-contained dashboard server that mirrors the ReplayAI website's Live Demo design. Record sessions locally, then launch the UI to view them:
 
 ```bash
-# 1. Record a session (stored locally by default when REPLAYAI_STORAGE=local)
-REPLAYAI_STORAGE=local replayai record my_agent.py
+# 1. Record a session (stored locally in ./ReplayAI/sessions/ by default)
+replayai record my_agent.py --name "my-agent" --tags "prod"
 
 # 2. Launch the dashboard
 replayai ui
@@ -65,12 +65,20 @@ replayai ui
 # → shows all locally-recorded sessions with full step timelines
 ```
 
+The dashboard features:
+- **6 stat cards** (Sessions, Failed, Steps, Cost, Fail Rate, Avg Run)
+- **Sessions sidebar** with status dots, duration, cost, step count, relative time
+- **Replay timeline** with a clickable scrubber bar + step controls (restart, prev, next, last)
+- **Step detail** with type badge, model, duration, tokens, offset, and input/output fields
+- **Auto-refresh** every 5 seconds (new sessions appear instantly)
+- **Window chrome** with traffic lights + breadcrumbs (matches the website design)
+
 Options:
 
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--port` | `7373` | Port to listen on |
-| `--storage` | `./replays` | Local storage path |
+| `--storage` | `./ReplayAI` | Local storage path (sessions saved to `{storage}/sessions/`) |
 | `--no-browser` | — | Don't auto-open the browser |
 
 The dashboard reads sessions from `{storage}/sessions/*.json` and serves:
@@ -97,7 +105,7 @@ Environment variables (all optional):
 | `REPLAYAI_PROJECT` | — | Default project slug/id |
 | `REPLAYAI_TOKEN` | — | Cloud API token |
 | `REPLAYAI_STORAGE` | `cloud` | `cloud`, `local`, or `both` |
-| `REPLAYAI_STORAGE_PATH` | `./replays` | Local storage directory (used when `storage` includes `local`) |
+| `REPLAYAI_STORAGE_PATH` | `./ReplayAI` | Local storage directory (used when `storage` includes `local`) |
 | `REPLAYAI_API_URL` | `http://localhost:3000` | Cloud API base URL |
 | `REPLAYAI_DASHBOARD_URL` | `http://localhost:3000` | Dashboard base URL |
 | `REPLAYAI_SAMPLE_RATE` | `1.0` | Fraction of sessions to record |

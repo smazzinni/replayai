@@ -54,11 +54,11 @@ await withTrace(
 
 ## Launching the dashboard
 
-The SDK ships with a self-contained dashboard server (Node built-ins only). Record sessions locally, then launch the UI:
+The SDK ships with a self-contained dashboard server that mirrors the ReplayAI website's Live Demo design. Record sessions locally, then launch the UI:
 
 ```bash
-# 1. Record a session (stored locally when storage=local)
-#    Your code calls withTrace() + recordStep() as shown above.
+# 1. Record a session (stored locally in ./ReplayAI/sessions/)
+#    Your code calls withTrace() + recordStep() with storage: "local".
 
 # 2. Launch the dashboard
 npx replayai ui
@@ -66,12 +66,20 @@ npx replayai ui
 # → shows all locally-recorded sessions with full step timelines
 ```
 
+The dashboard features:
+- **6 stat cards** (Sessions, Failed, Steps, Cost, Fail Rate, Avg Run)
+- **Sessions sidebar** with status dots, duration, cost, step count, relative time
+- **Replay timeline** with a clickable scrubber bar + step controls (restart, prev, next, last)
+- **Step detail** with type badge, model, duration, tokens, offset, and input/output fields
+- **Auto-refresh** every 5 seconds (new sessions appear instantly)
+- **Window chrome** with traffic lights + breadcrumbs (matches the website design)
+
 Options:
 
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--port` | `7373` | Port to listen on |
-| `--storage` | `./replays` | Local storage path |
+| `--storage` | `./ReplayAI` | Local storage path (sessions saved to `{storage}/sessions/`) |
 | `--no-browser` | — | Don't auto-open the browser |
 
 The dashboard reads sessions from `{storage}/sessions/*.json` and serves:
@@ -168,7 +176,7 @@ configure({
 
 ```typescript
 import { VERSION } from "@smazzinni/sdk";
-console.log(VERSION); // "0.7.0"
+console.log(VERSION); // "0.7.1"
 ```
 
 ## Environment variables
@@ -178,7 +186,7 @@ console.log(VERSION); // "0.7.0"
 | `REPLAYAI_PROJECT` | — | Default project slug/id when `trace()` omits it |
 | `REPLAYAI_TOKEN` | — | Cloud API token (sent as `Authorization: Bearer`) |
 | `REPLAYAI_STORAGE` | `cloud` | `local`, `cloud`, or `both` |
-| `REPLAYAI_STORAGE_PATH` | `./replays` | Local storage directory |
+| `REPLAYAI_STORAGE_PATH` | `./ReplayAI` | Local storage directory |
 | `REPLAYAI_API_URL` | `http://localhost:3000` | Cloud API base URL |
 | `REPLAYAI_DASHBOARD_URL` | `http://localhost:3000` | Where session URLs point |
 | `REPLAYAI_REDACT_PATTERNS` | built-in set | Comma-separated regex patterns to redact |

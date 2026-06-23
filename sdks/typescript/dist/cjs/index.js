@@ -26,7 +26,7 @@ Object.defineProperty(exports, "redactText", { enumerable: true, get: function (
 Object.defineProperty(exports, "redactOptional", { enumerable: true, get: function () { return redact_js_1.redactOptional; } });
 Object.defineProperty(exports, "redactMarker", { enumerable: true, get: function () { return redact_js_1.redactMarker; } });
 /** SDK version. */
-exports.VERSION = "0.7.0";
+exports.VERSION = "0.7.1";
 // Default export is a namespace object — handy for CJS consumers and as a
 // single `import replayai from "@smazzinni/sdk"` import.
 const replayai = {

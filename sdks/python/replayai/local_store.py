@@ -117,6 +117,8 @@ def get_stats() -> Dict[str, Any]:
     failed = sum(1 for s in sessions if s.get("status") == "failed")
     steps = sum(s.get("stepCount", 0) for s in sessions)
     cost = sum(float(s.get("costUsd", 0) or 0) for s in sessions)
+    durations = [int(s.get("durationMs", 0) or 0) for s in sessions]
+    avg_dur = sum(durations) / len(durations) if durations else 0
     return {
         "total": total,
         "failed": failed,
@@ -124,4 +126,5 @@ def get_stats() -> Dict[str, Any]:
         "steps": steps,
         "costUsd": round(cost, 4),
         "failRate": round(failed / total, 4) if total > 0 else 0.0,
+        "avgDurationMs": round(avg_dur),
     }

@@ -78,7 +78,7 @@ function resolveConfig() {
         project: overrides.project ?? envString("REPLAYAI_PROJECT"),
         token: overrides.token ?? envString("REPLAYAI_TOKEN"),
         storage,
-        storagePath: overrides.storagePath ?? envString("REPLAYAI_STORAGE_PATH") ?? "./replays",
+        storagePath: overrides.storagePath ?? envString("REPLAYAI_STORAGE_PATH") ?? "./ReplayAI",
         apiUrl: (overrides.apiUrl ?? envString("REPLAYAI_API_URL") ?? "http://localhost:3000").replace(/\/$/, ""),
         dashboardUrl: overrides.dashboardUrl ?? envString("REPLAYAI_DASHBOARD_URL") ?? "http://localhost:3000",
         sampleRate: overrides.sampleRate ?? envNumber("REPLAYAI_SAMPLE_RATE", 1.0),

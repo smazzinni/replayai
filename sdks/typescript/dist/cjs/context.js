@@ -281,8 +281,10 @@ async function withTrace(name, opts, fn) {
             }
             throw err;
         }
-        // Success path: only flush if sampled.
-        if (session.__sampled) {
+        // Success path: flush if sampled (cloud) OR if local storage is enabled
+        // (so locally-recorded sessions always persist regardless of sample rate).
+        const shouldFlush = session.__sampled || cfg.storage === "local" || cfg.storage === "both";
+        if (shouldFlush) {
             try {
                 await endAndFlush(session);
             }

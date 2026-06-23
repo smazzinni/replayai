@@ -56,7 +56,7 @@ class Config:
     project: Optional[str] = None
     token: Optional[str] = None
     storage: str = "cloud"
-    storage_path: str = "./replays"
+    storage_path: str = "./ReplayAI"
     api_url: str = "http://localhost:3000"
     dashboard_url: str = "http://localhost:3000"
     sample_rate: float = 1.0
@@ -110,7 +110,7 @@ def _load_from_env() -> Config:
     project = os.environ.get("REPLAYAI_PROJECT")
     token = os.environ.get("REPLAYAI_TOKEN")
     storage = os.environ.get("REPLAYAI_STORAGE", "cloud")
-    storage_path = os.environ.get("REPLAYAI_STORAGE_PATH", "./replays")
+    storage_path = os.environ.get("REPLAYAI_STORAGE_PATH", "./ReplayAI")
     api_url = os.environ.get("REPLAYAI_API_URL", "http://localhost:3000")
     dashboard_url = os.environ.get("REPLAYAI_DASHBOARD_URL", "http://localhost:3000")
     sample_rate = _parse_float(os.environ.get("REPLAYAI_SAMPLE_RATE"), 1.0)

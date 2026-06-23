@@ -1,33 +1,20 @@
-// ReplayAI TypeScript SDK — self-contained dashboard server.
-//
-// Reads locally-stored sessions and serves a complete UI. Node built-ins
-// only (http + fs + child_process for opening the browser). Launched by
-// `replayai ui` from the CLI bin.
-//
-// The dashboard UI mirrors the ReplayAI website's Live Demo section: dark
-// theme with teal primary accent, window chrome, 6 stat cards, sessions
-// sidebar, and a replay timeline with scrubber + step detail.
-//
-// Endpoints:
-//   GET /                 → HTML dashboard (single-page app, embedded)
-//   GET /api/sessions     → JSON list of session summaries
-//   GET /api/sessions/:id → JSON single session (with steps)
-//   GET /api/stats        → JSON aggregate stats
-//   GET /health           → JSON health check
+"""Shared dashboard HTML template for both Python + TypeScript SDKs.
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { exec } from "node:child_process";
-import { join, resolve } from "node:path";
-import { mkdirSync } from "node:fs";
-import { getConfig, configure } from "./config.js";
-import { listSessions, getSession, getStats, type LocalSession } from "./local-store.js";
+This module contains the HTML/CSS/JS for the self-contained dashboard UI.
+It's kept in Python so the Python SDK can import it directly; the TypeScript
+SDK includes an identical string literal in dashboard-server.ts.
 
-const SDK_VERSION = "0.7.1";
+The design mirrors the ReplayAI website's Live Demo section:
+- Dark theme with teal/emerald primary accent
+- Window chrome (traffic lights + breadcrumbs + tabs)
+- Stats strip (6 cards)
+- Sessions sidebar with status dots + metadata
+- Replay timeline with scrubber + step detail (input/output/model/duration)
+"""
 
-// The dashboard HTML — a self-contained single-page app matching the
-// ReplayAI website's Live Demo design. Identical to the Python SDK's
-// dashboard_html.py.
-const DASHBOARD_HTML = `<!DOCTYPE html>
+# The dashboard HTML — a self-contained single-page app matching the
+# ReplayAI website's Live Demo design.
+DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
@@ -71,8 +58,10 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   }
   .mono { font-family: 'SF Mono', Menlo, Consolas, 'Courier New', monospace; }
 
+  /* ---- App shell ---- */
   .app { display: flex; flex-direction: column; height: 100vh; }
 
+  /* ---- Top header ---- */
   .top-header {
     height: 48px;
     border-bottom: 1px solid var(--border);
@@ -113,6 +102,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     color: var(--fg-dim);
   }
 
+  /* ---- Dashboard window ---- */
   .dashboard-wrap {
     flex: 1; padding: 12px; overflow: hidden;
     display: flex; flex-direction: column;
@@ -128,6 +118,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     display: flex; flex-direction: column;
   }
 
+  /* ---- Window chrome ---- */
   .window-chrome {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 14px;
@@ -160,7 +151,12 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     display: inline-flex; align-items: center; gap: 6px;
   }
   .chrome-btn:hover { border-color: rgba(52,211,153,0.4); color: var(--fg); }
+  .chrome-btn kbd {
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
+    opacity: 0.7;
+  }
 
+  /* ---- Tabs ---- */
   .tabs {
     display: flex; align-items: center; gap: 2px;
     padding: 0 8px;
@@ -185,6 +181,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .tab svg { width: 14px; height: 14px; }
   .tab-desc { margin-left: auto; font-size: 10.5px; color: var(--muted-dim); padding-right: 12px; }
 
+  /* ---- Stats strip ---- */
   .stats-strip {
     display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
     padding: 10px 12px;
@@ -221,12 +218,14 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   }
   .stat-value { font-size: 18px; font-weight: 600; line-height: 1.2; margin-top: 1px; }
 
+  /* ---- Main panel ---- */
   .main-panel {
     flex: 1; display: grid; grid-template-columns: 280px 1fr;
     overflow: hidden; min-height: 0;
   }
   @media (max-width: 768px) { .main-panel { grid-template-columns: 1fr; } }
 
+  /* ---- Sessions sidebar ---- */
   .sidebar {
     border-right: 1px solid var(--border);
     display: flex; flex-direction: column;
@@ -263,7 +262,9 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     position: relative;
   }
   .session-item:hover { background: rgba(22,31,34,0.5); }
-  .session-item.active { background: rgba(22,31,34,0.7); }
+  .session-item.active {
+    background: rgba(22,31,34,0.7);
+  }
   .session-item.active::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0;
     width: 2px; background: var(--primary);
@@ -289,6 +290,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     color: var(--muted-dim); margin-top: 2px;
   }
 
+  /* ---- Detail panel ---- */
   .detail { display: flex; flex-direction: column; overflow: hidden; }
   .detail-header {
     padding: 12px 16px; border-bottom: 1px solid var(--border);
@@ -321,6 +323,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px;
   }
 
+  /* ---- Timeline scrubber ---- */
   .scrubber {
     padding: 10px 16px; border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -369,6 +372,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .ctrl-btn.primary:hover { background: #2bc289; }
   .ctrl-btn svg { width: 14px; height: 14px; }
 
+  /* ---- Step detail ---- */
   .step-detail { flex: 1; overflow-y: auto; padding: 14px 16px; }
   .step-header-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .step-type-badge {
@@ -427,17 +431,21 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   }
   .io-content.failed { border-color: rgba(251,113,133,0.3); background: rgba(251,113,133,0.05); }
 
+  /* ---- Empty states ---- */
   .empty-state {
     flex: 1; display: flex; align-items: center; justify-content: center;
     color: var(--muted); font-size: 13px; text-align: center; padding: 40px;
   }
-  .empty-icon { font-size: 36px; margin-bottom: 10px; opacity: 0.25; }
+  .empty-icon {
+    font-size: 36px; margin-bottom: 10px; opacity: 0.25;
+  }
   .empty-state code {
     font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
     background: var(--bg-elev); padding: 2px 6px; border-radius: 4px;
     color: var(--primary);
   }
 
+  /* ---- Scrollbar ---- */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
@@ -446,6 +454,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 </head>
 <body>
 <div class="app">
+  <!-- Top header -->
   <header class="top-header">
     <div class="logo">
       <div class="logo-icon">
@@ -457,11 +466,15 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
     <span class="badge-live">LOCAL</span>
     <div class="header-spacer"></div>
-    <div class="storage-info">Storage: <code id="storagePath">./ReplayAI</code></div>
+    <div class="storage-info">
+      Storage: <code id="storagePath">./ReplayAI</code>
+    </div>
   </header>
 
+  <!-- Dashboard window -->
   <div class="dashboard-wrap">
     <div class="dashboard">
+      <!-- Window chrome -->
       <div class="window-chrome">
         <div class="traffic-lights"><span></span><span></span><span></span></div>
         <div class="breadcrumbs">
@@ -479,6 +492,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
         </div>
       </div>
 
+      <!-- Tabs -->
       <div class="tabs">
         <button class="tab active">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -487,6 +501,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
         <div class="tab-desc">Scrub through every step of a recorded run</div>
       </div>
 
+      <!-- Stats strip -->
       <div class="stats-strip" id="statsStrip">
         <div class="stat-card">
           <div class="stat-icon primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 9h6v6H9z"/></svg></div>
@@ -514,7 +529,9 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
         </div>
       </div>
 
+      <!-- Main panel -->
       <div class="main-panel">
+        <!-- Sessions sidebar -->
         <div class="sidebar">
           <div class="sidebar-header">
             <span class="sidebar-title">Sessions</span>
@@ -527,6 +544,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
           <div class="sessions-list" id="sessionsList"></div>
         </div>
 
+        <!-- Detail panel -->
         <div class="detail" id="detailPanel">
           <div class="empty-state">
             <div>
@@ -603,13 +621,14 @@ async function loadSessions() {
     allSessions = data.sessions || [];
     document.getElementById('sessionCount').textContent = allSessions.length;
     renderSessions();
+    // Auto-select the first failed session (or first session) if nothing selected.
     if (!selectedId && allSessions.length > 0) {
       const firstFailed = allSessions.find(s => s.status === 'failed');
       selectSession((firstFailed || allSessions[0]).id);
     }
   } catch (e) {
     console.error('sessions:', e);
-    document.getElementById('sessionsList').innerHTML = '<div class="empty-state"><div><div class="empty-icon">∅</div><div>No sessions found.<br/>Record one with <code>withTrace()</code> in your code.</div></div></div>';
+    document.getElementById('sessionsList').innerHTML = '<div class="empty-state"><div><div class="empty-icon">∅</div><div>No sessions found.<br/>Record one with <code>replayai record agent.py</code><br/>or <code>withTrace()</code> in your code.</div></div></div>';
   }
 }
 
@@ -624,7 +643,24 @@ function renderSessions() {
     list.innerHTML = '<div class="empty-state"><div><div class="empty-icon">∅</div><div>' + (q ? 'No sessions match your filter.' : 'No sessions yet.<br/>Record one to see it here.') + '</div></div></div>';
     return;
   }
-  list.innerHTML = filtered.map(s => '<div class="session-item ' + (s.id === selectedId ? 'active' : '') + '" onclick="selectSession(\\'' + esc(s.id) + '\\')"><div class="session-dot ' + s.status + '"></div><div class="session-info"><div class="session-name">' + esc(s.name) + '</div><div class="session-meta"><span>' + fmtDur(s.durationMs) + '</span><span class="sep">·</span><span>' + fmtCost(s.costUsd) + '</span><span class="sep">·</span><span>' + (s.stepCount||0) + ' steps</span><span class="sep">·</span><span>' + fmtRel(s.startedAt) + '</span></div><div class="session-id">' + esc(s.id||'') + '</div></div></div>').join('');
+  list.innerHTML = filtered.map(s => `
+    <div class="session-item ${s.id === selectedId ? 'active' : ''}" onclick="selectSession('${esc(s.id)}')">
+      <div class="session-dot ${s.status}"></div>
+      <div class="session-info">
+        <div class="session-name">${esc(s.name)}</div>
+        <div class="session-meta">
+          <span>${fmtDur(s.durationMs)}</span>
+          <span class="sep">·</span>
+          <span>${fmtCost(s.costUsd)}</span>
+          <span class="sep">·</span>
+          <span>${s.stepCount||0} steps</span>
+          <span class="sep">·</span>
+          <span>${fmtRel(s.startedAt)}</span>
+        </div>
+        <div class="session-id">${esc(s.id||'')}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 async function selectSession(id) {
@@ -647,10 +683,49 @@ function renderDetail() {
   const s = currentSession;
   const steps = s.steps || [];
   const detail = document.getElementById('detailPanel');
+
   const statusClass = s.status || 'success';
   const statusLabel = (s.status || 'success').charAt(0).toUpperCase() + (s.status || 'success').slice(1);
 
-  detail.innerHTML = '<div class="detail-header"><div class="detail-status-row"><span class="status-badge ' + statusClass + '"><span class="dot"></span>' + statusLabel + '</span><span class="detail-id">' + esc(s.id||'') + '</span></div><div class="detail-title">' + esc(s.name) + '</div><div class="detail-meta"><span class="mono">' + esc(s.agent||'') + '</span><span class="sep">·</span><span>' + esc(s.framework||'') + '</span><span class="sep">·</span><span>' + fmtDur(s.durationMs) + '</span><span class="sep">·</span><span>' + (s.tokenTotal||0).toLocaleString() + ' tok</span><span class="sep">·</span><span>' + fmtCost(s.costUsd) + '</span></div>' + (s.tags && s.tags.length ? '<div class="detail-tags">' + s.tags.map(t=>'<span class="tag">' + esc(t) + '</span>').join('') + '</div>' : '') + '</div>' + (steps.length > 0 ? '<div class="scrubber"><div class="scrubber-meta"><span>Step ' + (stepIndex + 1) + ' / ' + steps.length + '</span><span>' + fmtOffset(steps[stepIndex]?.offsetMs ?? steps[stepIndex]?.t ?? 0) + ' · ' + fmtDur(steps[stepIndex]?.durationMs ?? 0) + '</span></div><div class="scrubber-bar">' + steps.map((st, i) => '<button class="seg ' + (st.type||'default') + ' ' + (i===stepIndex?'active':'') + '" onclick="stepTo(' + i + ')" title="' + esc(st.name) + ' · ' + fmtDur(st.durationMs) + '"></button>').join('') + '</div><div class="scrubber-controls"><button class="ctrl-btn" onclick="stepTo(0)" title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button><button class="ctrl-btn" onclick="stepTo(' + (stepIndex - 1) + ')" ' + (stepIndex === 0 ? 'disabled' : '') + ' title="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button><button class="ctrl-btn primary" onclick="stepTo(' + (stepIndex + 1) + ')" ' + (stepIndex >= steps.length - 1 ? 'disabled' : '') + '>Next step <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button><button class="ctrl-btn" onclick="stepTo(' + (steps.length - 1) + ')" ' + (stepIndex >= steps.length - 1 ? 'disabled' : '') + ' title="Last"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg></button></div></div><div class="step-detail" id="stepDetail"></div>' : '<div class="empty-state"><div><div class="empty-icon">∅</div><div>No steps recorded in this session.</div></div></div>');
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-status-row">
+        <span class="status-badge ${statusClass}"><span class="dot"></span>${statusLabel}</span>
+        <span class="detail-id">${esc(s.id||'')}</span>
+      </div>
+      <div class="detail-title">${esc(s.name)}</div>
+      <div class="detail-meta">
+        <span class="mono">${esc(s.agent||'')}</span>
+        <span class="sep">·</span>
+        <span>${esc(s.framework||'')}</span>
+        <span class="sep">·</span>
+        <span>${fmtDur(s.durationMs)}</span>
+        <span class="sep">·</span>
+        <span>${(s.tokenTotal||0).toLocaleString()} tok</span>
+        <span class="sep">·</span>
+        <span>${fmtCost(s.costUsd)}</span>
+      </div>
+      ${s.tags && s.tags.length ? `<div class="detail-tags">${s.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+    </div>
+    ${steps.length > 0 ? `
+      <div class="scrubber">
+        <div class="scrubber-meta">
+          <span>Step ${stepIndex + 1} / ${steps.length}</span>
+          <span>${fmtOffset(steps[stepIndex]?.offsetMs ?? steps[stepIndex]?.t ?? 0)} · ${fmtDur(steps[stepIndex]?.durationMs ?? 0)}</span>
+        </div>
+        <div class="scrubber-bar">
+          ${steps.map((st, i) => `<button class="seg ${st.type||'default'} ${i===stepIndex?'active':''}" onclick="stepTo(${i})" title="${esc(st.name)} · ${fmtDur(st.durationMs)}"></button>`).join('')}
+        </div>
+        <div class="scrubber-controls">
+          <button class="ctrl-btn" onclick="stepTo(0)" title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+          <button class="ctrl-btn" onclick="stepTo(${stepIndex - 1})" ${stepIndex === 0 ? 'disabled' : ''} title="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="ctrl-btn primary" onclick="stepTo(${stepIndex + 1})" ${stepIndex >= steps.length - 1 ? 'disabled' : ''}>Next step <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
+          <button class="ctrl-btn" onclick="stepTo(${steps.length - 1})" ${stepIndex >= steps.length - 1 ? 'disabled' : ''} title="Last"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg></button>
+        </div>
+      </div>
+      <div class="step-detail" id="stepDetail"></div>
+    ` : '<div class="empty-state"><div><div class="empty-icon">∅</div><div>No steps recorded in this session.</div></div></div>'}
+  `;
 
   if (steps.length > 0) renderStep();
 }
@@ -660,11 +735,36 @@ function renderStep() {
   const steps = currentSession.steps || [];
   const step = steps[stepIndex];
   if (!step) return;
+
   const type = step.type || 'default';
   const status = step.status || 'success';
+
   const container = document.getElementById('stepDetail');
   if (!container) return;
-  container.innerHTML = '<div class="step-header-row"><span class="step-type-badge"><span class="dot ' + type + '"></span>' + esc(type) + '</span><span class="step-name">' + esc(step.name) + '</span><span class="step-status ' + status + '">' + status + '</span></div><div class="step-meta-grid">' + (step.model ? '<div class="meta-box"><div class="meta-label">Model</div><div class="meta-value">' + esc(step.model) + '</div></div>' : '') + '<div class="meta-box"><div class="meta-label">Duration</div><div class="meta-value">' + fmtDur(step.durationMs || 0) + '</div></div>' + (step.tokensIn != null ? '<div class="meta-box"><div class="meta-label">Tokens</div><div class="meta-value">' + (step.tokensIn||0) + ' → ' + (step.tokensOut||0) + '</div></div>' : '') + '<div class="meta-box"><div class="meta-label">Offset</div><div class="meta-value">' + fmtOffset(step.offsetMs ?? step.t ?? 0) + '</div></div></div><div class="step-io"><div class="io-block"><div class="io-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Input</div><div class="io-content">' + esc(step.input || '(empty)') + '</div></div><div class="io-block"><div class="io-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 17 14 11 20 5"/><line x1="4" y1="19" x2="12" y2="19"/></svg> Output</div><div class="io-content ' + (status === 'failed' ? 'failed' : '') + '">' + esc(step.output || '(empty)') + '</div></div></div>';
+
+  container.innerHTML = `
+    <div class="step-header-row">
+      <span class="step-type-badge"><span class="dot ${type}"></span>${esc(type)}</span>
+      <span class="step-name">${esc(step.name)}</span>
+      <span class="step-status ${status}">${status}</span>
+    </div>
+    <div class="step-meta-grid">
+      ${step.model ? `<div class="meta-box"><div class="meta-label">Model</div><div class="meta-value">${esc(step.model)}</div></div>` : ''}
+      <div class="meta-box"><div class="meta-label">Duration</div><div class="meta-value">${fmtDur(step.durationMs || 0)}</div></div>
+      ${step.tokensIn != null ? `<div class="meta-box"><div class="meta-label">Tokens</div><div class="meta-value">${step.tokensIn||0} → ${step.tokensOut||0}</div></div>` : ''}
+      <div class="meta-box"><div class="meta-label">Offset</div><div class="meta-value">${fmtOffset(step.offsetMs ?? step.t ?? 0)}</div></div>
+    </div>
+    <div class="step-io">
+      <div class="io-block">
+        <div class="io-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Input</div>
+        <div class="io-content">${esc(step.input || '(empty)')}</div>
+      </div>
+      <div class="io-block">
+        <div class="io-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 17 14 11 20 5"/><line x1="4" y1="19" x2="12" y2="19"/></svg> Output</div>
+        <div class="io-content ${status === 'failed' ? 'failed' : ''}">${esc(step.output || '(empty)')}</div>
+      </div>
+    </div>
+  `;
 }
 
 function stepTo(i) {
@@ -674,127 +774,14 @@ function stepTo(i) {
   renderDetail();
 }
 
+// Init
 document.getElementById('searchInput').addEventListener('input', renderSessions);
 document.getElementById('refreshBtn').addEventListener('click', () => { loadStats(); loadSessions(); });
 loadStats();
 loadSessions();
+
+// Auto-refresh every 5s
 setInterval(() => { loadStats(); loadSessions(); }, 5000);
 </script>
 </body>
-</html>`;
-
-function sendJSON(res: ServerResponse, data: unknown, status = 200): void {
-  const body = JSON.stringify(data);
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Content-Length": Buffer.byteLength(body),
-    "Cache-Control": "no-store",
-    "Access-Control-Allow-Origin": "*",
-  });
-  res.end(body);
-}
-
-function sendHTML(res: ServerResponse, html: string, status = 200): void {
-  const body = Buffer.from(html, "utf8");
-  res.writeHead(status, {
-    "Content-Type": "text/html; charset=utf-8",
-    "Content-Length": body.length,
-    "Cache-Control": "no-store",
-  });
-  res.end(body);
-}
-
-function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "start"
-        : "xdg-open";
-  try {
-    exec(`${cmd} ${url}`, () => {
-      /* ignore errors */
-    });
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Start the dashboard server (blocking). Returns exit code. */
-export function startServer(opts: {
-  port?: number;
-  storagePath?: string;
-  openBrowser?: boolean;
-}): number {
-  const port = opts.port ?? 7373;
-  const storagePath = opts.storagePath;
-  const shouldOpen = opts.openBrowser ?? true;
-
-  if (storagePath) {
-    configure({ storage: "local", storagePath });
-  }
-
-  const cfg = getConfig();
-  const absStorage = resolve(cfg.storagePath);
-  mkdirSync(join(absStorage, "sessions"), { recursive: true });
-
-  const server = createServer((req, res) => {
-    const url = new URL(req.url || "/", `http://localhost:${port}`);
-    const path = url.pathname.replace(/\/$/, "") || "/";
-
-    if (path === "/") {
-      const html = DASHBOARD_HTML.replace("__PORT__", String(port));
-      sendHTML(res, html);
-      return;
-    }
-    if (path === "/health") {
-      sendJSON(res, { ok: true, service: "replayai-dashboard", version: SDK_VERSION });
-      return;
-    }
-    if (path === "/api/stats") {
-      sendJSON(res, getStats());
-      return;
-    }
-    if (path === "/api/sessions") {
-      const limit = parseInt(url.searchParams.get("limit") || "200", 10);
-      const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-      const sessions = listSessions(limit, offset).map((s: LocalSession) => {
-        const { steps, ...rest } = s;
-        return { ...rest, stepCount: steps?.length ?? 0 };
-      });
-      sendJSON(res, { sessions, total: sessions.length });
-      return;
-    }
-    if (path.startsWith("/api/sessions/")) {
-      const sid = decodeURIComponent(path.slice("/api/sessions/".length));
-      const session = getSession(sid);
-      if (!session) {
-        sendJSON(res, { error: "not found" }, 404);
-        return;
-      }
-      sendJSON(res, session);
-      return;
-    }
-    sendJSON(res, { error: "not found" }, 404);
-  });
-
-  server.listen(port, "0.0.0.0", () => {
-    const url = `http://localhost:${port}`;
-    console.log(`[replayai] dashboard server running at ${url}`);
-    console.log(`[replayai] storage: ${absStorage}`);
-    console.log(`[replayai] press Ctrl+C to stop`);
-    if (shouldOpen) {
-      setTimeout(() => openBrowser(url), 800);
-    }
-  });
-
-  const shutdown = () => {
-    console.log("\n[replayai] shutting down…");
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000).unref();
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-
-  return 0;
-}
+</html>"""

@@ -34,6 +34,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     rec.add_argument("--name", default=None, help="Session name (default: script name).")
     rec.add_argument("--tags", default=None, help="Comma-separated tags.")
     rec.add_argument("--framework", default="Custom", help="Agent framework.")
+    rec.add_argument("--storage", default="./ReplayAI", help="Local storage path (default: ./ReplayAI).")
+    rec.add_argument("--cloud", action="store_true", help="Also sync to cloud API (storage=both).")
 
     # --- test ---
     tst = sub.add_parser("test", help="Run replay regression tests via pytest.")
@@ -44,7 +46,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # --- ui ---
     ui = sub.add_parser("ui", help="Start the ReplayAI dashboard (self-contained server).")
     ui.add_argument("--port", type=int, default=7373, help="Port (default: 7373).")
-    ui.add_argument("--storage", default="./replays", help="Local storage path (default: ./replays).")
+    ui.add_argument("--storage", default="./ReplayAI", help="Local storage path (default: ./ReplayAI).")
     ui.add_argument("--cloud", action="store_true", help="Use cloud sync (still serves the local UI).")
     ui.add_argument("--token", default=None, help="Cloud API token.")
     ui.add_argument("--no-browser", action="store_true", help="Don't auto-open the browser.")
@@ -73,10 +75,24 @@ def _cmd_record(args: argparse.Namespace) -> int:
     tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
     project = args.project or os.environ.get("REPLAYAI_PROJECT")
 
+    # Default to local storage so the recorded session is visible in the
+    # dashboard without needing a running cloud API. Users can override with
+    # REPLAYAI_STORAGE=cloud or --cloud.
+    if args.cloud:
+        os.environ.setdefault("REPLAYAI_STORAGE", "both")
+    else:
+        os.environ.setdefault("REPLAYAI_STORAGE", "local")
+    os.environ.setdefault("REPLAYAI_STORAGE_PATH", args.storage)
+
+    # Force config reload so the env vars take effect.
+    from . import config as _config
+    _config._config = _config._load_from_env()
+
     print(f"[replayai] recording: {script}")
     print(f"  name:      {name}")
     print(f"  project:   {project or '(auto)'}")
     print(f"  framework: {args.framework}")
+    print(f"  storage:   {_config.get_config().storage} → {_config.get_config().storage_path}")
     if tags:
         print(f"  tags:      {tags}")
 
@@ -86,7 +102,7 @@ def _cmd_record(args: argparse.Namespace) -> int:
             # Run the script as __main__ — any record_step calls inside it
             # will be captured.
             runpy.run_path(script, run_name="__main__")
-        print(f"[replayai] session recorded — check the dashboard")
+        print(f"[replayai] session recorded — run 'replayai ui' to view it")
         return 0
     except SystemExit as e:
         # Script called sys.exit() — that's fine, the trace still flushed.

@@ -312,14 +312,17 @@ class TraceContext:
         # Sampling: drop non-failed sessions when not sampled. Failures are
         # always recorded unless the user explicitly opts out via
         # ``Config.always_record_failures = False``.
+        # EXCEPTION: when storage includes "local", always persist so the
+        # local dashboard can show the session (local recording is opt-in
+        # and shouldn't be gated by the cloud sample rate).
         if not self._sampled:
             is_failure = self.session["status"] == "failed"
             record_failures = cfg.always_record_failures
-            if not (is_failure and record_failures):
+            is_local = cfg.storage in ("local", "both")
+            if not (is_failure and record_failures) and not is_local:
                 return
 
-        # Only flush when storage includes "cloud". Local-only mode persists
-        # to disk in MVP — print a notice.
+        # Persist: cloud (POST to API) and/or local (JSON file).
         try:
             if cfg.storage in ("cloud", "both"):
                 flush_session(self.session)
