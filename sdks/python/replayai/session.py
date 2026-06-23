@@ -270,6 +270,13 @@ class ReplaySession:
         ``inputs`` is passed as a single positional argument to the
         callable when not ``None`` — use ``lambda: agent.run(...)`` for
         zero-argument agents.
+
+        **Diff algorithm:** Uses LCS (Longest Common Subsequence) alignment
+        by step name so that an inserted/removed step doesn't cascade into
+        false divergences for every subsequent step. Steps are first aligned
+        by name; aligned pairs are then compared field-by-field (output,
+        status, model). Unaligned loaded steps are "removed"; unaligned live
+        steps are "added".
         """
         sess = self._fetch()
         loaded_steps = self._apply_mocks(list(sess.get("steps", [])))
@@ -311,32 +318,7 @@ class ReplaySession:
                 except Exception:  # noqa: BLE001
                     pass
 
-        divergences: List[Dict[str, Any]] = []
-        n = max(len(loaded_steps), len(live_steps))
-        for i in range(n):
-            loaded = loaded_steps[i] if i < len(loaded_steps) else None
-            live = live_steps[i] if i < len(live_steps) else None
-            if loaded is None or live is None:
-                divergences.append(
-                    {
-                        "step": i,
-                        "field": "existence",
-                        "loaded": loaded,
-                        "live": live,
-                    }
-                )
-                continue
-            loaded_out = loaded.get("output")
-            live_out = live.get("output")
-            if loaded_out != live_out:
-                divergences.append(
-                    {
-                        "step": i,
-                        "field": "output",
-                        "loaded": loaded_out,
-                        "live": live_out,
-                    }
-                )
+        divergences = _diff_steps(loaded_steps, live_steps)
 
         return {
             "matches": len(divergences) == 0,
@@ -407,3 +389,99 @@ class _ReplayTraceContext(TraceContext):
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
         return self.__exit__(exc_type, exc, tb)
+
+
+# ---------------------------------------------------------------------------
+# Step diff — LCS-based alignment by step name.
+# ---------------------------------------------------------------------------
+def _diff_steps(
+    loaded: List[Dict[str, Any]],
+    live: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Compute divergences between two step lists using LCS alignment.
+
+    Steps are aligned by ``name`` (with ``type`` as a tiebreaker) so that
+    an inserted or removed step doesn't cascade into false divergences for
+    every subsequent step. Aligned pairs are compared field-by-field;
+    unaligned loaded steps are "removed"; unaligned live steps are "added".
+
+    Returns a list of divergence dicts, each with:
+        - ``step``: the loaded-side index (or live-side index for "added")
+        - ``field``: "output" | "status" | "model" | "removed" | "added"
+        - ``loaded``: the loaded value (or step name for removed/added)
+        - ``live``: the live value (or step name for removed/added)
+    """
+    n, m = len(loaded), len(live)
+
+    # Build the LCS table. Equality is based on step name + type (not output,
+    # so that two steps with the same name but different outputs still align).
+    def _match(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+        return a.get("name") == b.get("name") and a.get("type") == b.get("type")
+
+    # dp[i][j] = length of LCS of loaded[:i] and live[:j]
+    dp: List[List[int]] = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if _match(loaded[i - 1], live[j - 1]):
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+
+    # Backtrack to build the aligned pairs.
+    pairs: List[tuple] = []  # (loaded_idx_or_None, live_idx_or_None)
+    i, j = n, m
+    while i > 0 and j > 0:
+        if _match(loaded[i - 1], live[j - 1]):
+            pairs.append((i - 1, j - 1))
+            i -= 1
+            j -= 1
+        elif dp[i - 1][j] >= dp[i][j - 1]:
+            pairs.append((i - 1, None))  # loaded step removed
+            i -= 1
+        else:
+            pairs.append((None, j - 1))  # live step added
+            j -= 1
+    while i > 0:
+        pairs.append((i - 1, None))
+        i -= 1
+    while j > 0:
+        pairs.append((None, j - 1))
+        j -= 1
+    pairs.reverse()
+
+    # Build divergences.
+    divergences: List[Dict[str, Any]] = []
+    for li, ri in pairs:
+        if li is None:
+            # Live step not in loaded — "added".
+            divergences.append({
+                "step": ri,
+                "field": "added",
+                "loaded": None,
+                "live": live[ri].get("name"),
+            })
+            continue
+        if ri is None:
+            # Loaded step not in live — "removed".
+            divergences.append({
+                "step": li,
+                "field": "removed",
+                "loaded": loaded[li].get("name"),
+                "live": None,
+            })
+            continue
+        # Aligned — compare fields.
+        l_step = loaded[li]
+        r_step = live[ri]
+        for field in ("output", "status", "model"):
+            lv = l_step.get(field)
+            rv = r_step.get(field)
+            if lv != rv:
+                divergences.append({
+                    "step": li,
+                    "field": field,
+                    "loaded": lv,
+                    "live": rv,
+                })
+
+    return divergences

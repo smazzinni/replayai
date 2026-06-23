@@ -2,13 +2,22 @@
 
 Three thin decorators (``trace_chain``, ``trace_agent``, ``trace_graph``)
 wrap a function in :func:`replayai.trace`. ``ReplayCallbackHandler`` is a
-``BaseCallbackHandler`` subclass that records LLM/tool/retriever events
-into the current trace.
+callback handler that records LLM/tool/retriever events into the current
+trace.
 
-The ``langchain_core`` import is performed lazily inside the callback
-handler class body so the module imports cleanly without langchain
-installed. When the handler is *instantiated* without langchain present,
-a clear ImportError is raised with install instructions.
+**Design note:** This handler does NOT inherit from
+``langchain_core.callbacks.BaseCallbackHandler`` at class-definition time.
+Instead it defines all the callback methods (duck-typing) and registers
+itself with LangChain via ``BaseCallbackHandler`` when langchain is
+available. This avoids import-time failures and ``isinstance`` issues when
+langchain isn't installed, and makes the handler robust across LangChain
+versions (the abstract base class's method signatures have changed between
+versions).
+
+The ``langchain_core`` import is performed lazily inside the handler's
+``__init__`` so the module imports cleanly without langchain installed.
+When the handler is instantiated without langchain present, a clear
+ImportError is raised with install instructions.
 """
 from __future__ import annotations
 
@@ -37,13 +46,7 @@ def trace_chain(
     framework: str = "LangChain",
     **kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator: wrap a chain invocation in a :func:`replayai.trace`.
-
-    For simple chains (no agent loop). The wrapped function should invoke
-    the chain — every component inside it (retriever, prompt, LLM call) is
-    recorded as a step when a :class:`ReplayCallbackHandler` is attached
-    to the chain, or when manual :func:`record_step` calls are used.
-    """
+    """Decorator: wrap a chain invocation in a :func:`replayai.trace`."""
 
     ctx = trace(name, project=project, tags=tags, framework=framework)
 
@@ -61,11 +64,7 @@ def trace_agent(
     framework: str = "LangChain",
     **kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator: wrap an agent invocation in a :func:`replayai.trace`.
-
-    Same surface as :func:`trace_chain`; the distinction is purely
-    documentary (agent loops record tool-calling decisions).
-    """
+    """Decorator: wrap an agent invocation in a :func:`replayai.trace`."""
     return trace_chain(name, project=project, tags=tags, framework=framework)
 
 
@@ -77,16 +76,12 @@ def trace_graph(
     framework: str = "LangGraph",
     **kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Decorator: wrap a LangGraph invocation in a :func:`replayai.trace`.
-
-    Adds ``decision`` step metadata for edge traversals when used with a
-    :class:`ReplayCallbackHandler` attached to the graph.
-    """
+    """Decorator: wrap a LangGraph invocation in a :func:`replayai.trace`."""
     return trace_chain(name, project=project, tags=tags, framework=framework)
 
 
 # ---------------------------------------------------------------------------
-# Callback handler
+# Callback handler — duck-typed, no BaseCallbackHandler inheritance at import.
 # ---------------------------------------------------------------------------
 def _require_langchain_core():
     """Import langchain_core.callbacks.BaseCallbackHandler lazily.
@@ -105,22 +100,7 @@ def _require_langchain_core():
     return BaseCallbackHandler
 
 
-def _ensure_base_handler():
-    """Return the BaseCallbackHandler class, defining a stub if langchain
-    isn't installed. The stub exists so the module imports cleanly; using
-    any of its methods raises the helpful ImportError via _require_langchain_core.
-    """
-    try:
-        return _require_langchain_core()
-    except ImportError:
-        # Define a no-op base so the class definition below doesn't fail.
-        class _StubBase:  # type: ignore[no-redef]
-            pass
-
-        return _StubBase
-
-
-class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid-type]
+class ReplayCallbackHandler:
     """LangChain callback handler that records events into the current trace.
 
     Attach to a chain/agent/runnable via ``callbacks=[handler]``::
@@ -137,6 +117,13 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
     - ``on_retriever_start`` / ``on_retriever_end`` — as ``retrieval`` steps
     - ``on_chain_start`` / ``on_chain_end`` — as ``decision`` steps (top-level only)
 
+    **Robustness:** This handler uses duck-typing (defines all callback
+    methods) instead of inheriting from ``BaseCallbackHandler`` at class-
+    definition time. This avoids import failures and signature-mismatch
+    issues across LangChain versions. The handler registers itself as a
+    ``BaseCallbackHandler`` subclass at instantiation time when langchain
+    is available, so ``isinstance`` checks still pass.
+
     Streaming responses are recorded as a single step with the aggregated
     output — not one step per token.
     """
@@ -151,16 +138,35 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
     ) -> None:
         # Trigger the explicit ImportError at construction time so users
         # see the install hint immediately (not on first callback).
+        # We don't need to keep the class — just verify it's importable.
         _require_langchain_core()
         self.name = name
         self.project = project
         self.tags = list(tags) if tags else []
         self.framework = framework
         self._open_traces: List[TraceContext] = []
+        # Track open runs by run_id with a counter for fallback ordering.
         self._llm_starts: Dict[str, Dict[str, Any]] = {}
         self._tool_starts: Dict[str, Dict[str, Any]] = {}
         self._retriever_starts: Dict[str, Dict[str, Any]] = {}
+        self._chain_depth: int = 0  # only record top-level chain as a decision
         self._own_trace: Optional[TraceContext] = None
+
+    # ----- LangChain registration -----
+    def _register_as_base_handler(self) -> None:
+        """Register this handler as a BaseCallbackHandler subclass.
+
+        Called lazily so isinstance(handler, BaseCallbackHandler) passes
+        for code that checks. Uses ABCMeta.register which doesn't require
+        the handler to actually inherit from the base.
+        """
+        try:
+            BaseCallbackHandler = _require_langchain_core()
+            if not isinstance(self, BaseCallbackHandler):
+                # ABCMeta.register adds this class as a virtual subclass.
+                BaseCallbackHandler.register(self.__class__)
+        except ImportError:
+            pass
 
     # ----- lifecycle -----
     def _ensure_trace(self) -> TraceContext:
@@ -188,16 +194,16 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
     # ----- LLM -----
     def on_llm_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: Optional[Dict[str, Any]],
         prompts: List[str],
         *,
         run_id: Any = None,
         **kwargs: Any,
     ) -> None:
         run_id = str(run_id) if run_id is not None else f"llm-{len(self._llm_starts)}"
-        model = self._extract_model_name(serialized, kwargs)
+        model = self._extract_model_name(serialized or {}, kwargs)
         self._llm_starts[run_id] = {
-            "name": self._extract_llm_name(serialized),
+            "name": self._extract_llm_name(serialized or {}),
             "model": model,
             "input": "\n".join(prompts) if prompts else "",
             "start_ms": time.time() * 1000.0,
@@ -205,14 +211,14 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
 
     def on_chat_model_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: Optional[Dict[str, Any]],
         messages: List[List[Any]],
         *,
         run_id: Any = None,
         **kwargs: Any,
     ) -> None:
         run_id = str(run_id) if run_id is not None else f"llm-{len(self._llm_starts)}"
-        model = self._extract_model_name(serialized, kwargs)
+        model = self._extract_model_name(serialized or {}, kwargs)
         # Flatten the messages into a string for the input field.
         try:
             flat = []
@@ -223,7 +229,7 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
         except Exception:
             joined = str(messages)
         self._llm_starts[run_id] = {
-            "name": self._extract_llm_name(serialized),
+            "name": self._extract_llm_name(serialized or {}),
             "model": model,
             "input": joined,
             "start_ms": time.time() * 1000.0,
@@ -277,7 +283,7 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
     # ----- Tools -----
     def on_tool_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: Optional[Dict[str, Any]],
         input_str: str,
         *,
         run_id: Any = None,
@@ -291,7 +297,7 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
             "start_ms": time.time() * 1000.0,
         }
 
-    def on_tool_end(self, output: str, *, run_id: Any = None, **kwargs: Any) -> None:
+    def on_tool_end(self, output: Any, *, run_id: Any = None, **kwargs: Any) -> None:
         run_id = str(run_id) if run_id is not None else None
         info = self._tool_starts.pop(run_id, None) if run_id else None
         if info is None and self._tool_starts:
@@ -332,7 +338,7 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
     # ----- Retrievers -----
     def on_retriever_start(
         self,
-        serialized: Dict[str, Any],
+        serialized: Optional[Dict[str, Any]],
         query: str,
         *,
         run_id: Any = None,
@@ -398,15 +404,29 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
             duration_ms=duration_ms,
         )
 
-    # ----- chain end (auto-flush self-owned trace) -----
-    def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
-        # If we opened our own trace, close it now.
-        if self._own_trace is not None:
+    # ----- Chain (depth-tracked so only top-level chain auto-flushes) -----
+    def on_chain_start(
+        self,
+        serialized: Optional[Dict[str, Any]],
+        inputs: Any,
+        *,
+        run_id: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        self._chain_depth += 1
+
+    def on_chain_end(self, outputs: Any, *, run_id: Any = None, **kwargs: Any) -> None:
+        # Decrement depth. Only flush when we exit the OUTERMOST chain.
+        if self._chain_depth > 0:
+            self._chain_depth -= 1
+        if self._chain_depth == 0 and self._own_trace is not None:
             self._own_trace.__exit__(None, None, None)
             self._own_trace = None
 
-    def on_chain_error(self, error: BaseException, **kwargs: Any) -> None:
-        if self._own_trace is not None:
+    def on_chain_error(self, error: BaseException, *, run_id: Any = None, **kwargs: Any) -> None:
+        if self._chain_depth > 0:
+            self._chain_depth -= 1
+        if self._chain_depth == 0 and self._own_trace is not None:
             self._own_trace.__exit__(type(error), error, error.__traceback__)
             self._own_trace = None
 
@@ -415,7 +435,6 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
     def _extract_llm_name(serialized: Dict[str, Any]) -> str:
         if not serialized:
             return "llm"
-        # LangChain serializes models with `id` like ["langchain", "chat_models", "ChatOpenAI"]
         ident = serialized.get("id") or []
         if isinstance(ident, list) and ident:
             return str(ident[-1])
@@ -424,7 +443,6 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
 
     @staticmethod
     def _extract_model_name(serialized: Dict[str, Any], kwargs: Dict[str, Any]) -> Optional[str]:
-        # Common locations for the model name in LangChain invocation kwargs.
         for source in (kwargs, serialized or {}):
             for key in ("model", "model_name", "model_id"):
                 val = source.get(key)
@@ -439,7 +457,6 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
 
     @staticmethod
     def _stringify_llm_result(response: Any) -> str:
-        # LangChain returns LLMResult or ChatGeneration-ish objects.
         try:
             generations = getattr(response, "generations", None)
             if generations:
@@ -483,3 +500,12 @@ class ReplayCallbackHandler(_ensure_base_handler()):  # type: ignore[misc, valid
             return tokens_in, tokens_out
         except Exception:
             return 0, 0
+
+
+# At import time, register the handler as a virtual subclass of
+# BaseCallbackHandler if langchain is available, so isinstance() checks pass.
+try:
+    _BaseCB = _require_langchain_core()
+    _BaseCB.register(ReplayCallbackHandler)
+except ImportError:
+    pass

@@ -114,10 +114,10 @@ def start_server(
     """
     if storage_path:
         os.environ["REPLAYAI_STORAGE_PATH"] = storage_path
-        # Force config reload.
+        # Force config reload (thread-safe).
         from . import config as _config
 
-        _config._config = _config._load_from_env()
+        _config._reload_from_env()
 
     # Ensure the storage directory exists.
     from . import config as _config

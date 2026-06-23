@@ -22,7 +22,7 @@ from .steps import arecord_step, record_step
 from .store import StoreError, dashboard_url_for, flush_session
 from .subprocess_helper import get_session_data, session_context, set_session_data
 
-__version__ = "0.7.1"
+__version__ = "0.7.2"
 
 __all__ = [
     "__version__",
@@ -41,7 +41,8 @@ __all__ = [
     "configure",
     "get_config",
     "Config",
-    "strict_mode",
+    "get_strict_mode",
+    "set_strict_mode",
     # Cost / redaction
     "estimate_cost",
     "estimate_step_cost",
@@ -57,21 +58,60 @@ __all__ = [
 ]
 
 
-# Module-level property for `replayai.strict_mode` so that the documented
-# `replayai.strict_mode = True` API proxies to the Config singleton.
-# Module __setattr__ is not supported by Python, but swapping the module's
-# __class__ to a ModuleType subclass with a real property descriptor works.
-import sys as _sys
+# ---------------------------------------------------------------------------
+# Strict mode — explicit get/set functions.
+#
+# Earlier versions (≤0.7.1) used a module __class__ swap hack to support
+# `replayai.strict_mode = True`. That approach:
+#   - Broke type checkers (mypy/pyright couldn't see the property).
+#   - Could fail in embeddable Python builds that restrict __class__ reassignment.
+#   - Was surprising to users expecting a plain attribute.
+#
+# The documented API is now:
+#   replayai.set_strict_mode(True)   # instead of: replayai.strict_mode = True
+#   replayai.get_strict_mode()       # instead of: replayai.strict_mode
+#
+# Backward compat: `replayai.strict_mode` still reads correctly (returns the
+# current value) via a module-level variable kept in sync by get_config().
+# Assigning to it is a no-op that prints a deprecation warning.
+# ---------------------------------------------------------------------------
+def get_strict_mode() -> bool:
+    """Return the current strict-mode flag (mirrors ``config.strict``)."""
+    return get_config().strict
 
 
-class _ReplayAIModule(_sys.modules[__name__].__class__):
-    @property
-    def strict_mode(self) -> bool:  # type: ignore[override]
-        return get_config().strict
+def set_strict_mode(value: bool) -> None:
+    """Enable or disable strict mode.
 
-    @strict_mode.setter
-    def strict_mode(self, value: bool) -> None:
-        configure(strict=bool(value))
+    When strict mode is on, recording/flushing failures raise
+    :class:`RecordingError` instead of printing a warning.
+
+    Equivalent to ``replayai.configure(strict=True)``.
+    """
+    configure(strict=bool(value))
 
 
-_sys.modules[__name__].__class__ = _ReplayAIModule
+# Backward compatibility: `replayai.strict_mode` (read) still works via
+# module-level __getattr__ (PEP 562, Python 3.7+). Assignment is intercepted
+# by __setattr__ to print a deprecation warning pointing to set_strict_mode().
+# This is the clean, supported way to have a module-level property without
+# swapping __class__ (which broke type checkers and some embeddable builds).
+def __getattr__(name: str):  # type: ignore[no-untyped-def]
+    if name == "strict_mode":
+        return get_strict_mode()
+    raise AttributeError(f"module 'replayai' has no attribute {name!r}")
+
+
+def __setattr__(name: str, value: object) -> None:  # type: ignore[no-untyped-def]
+    if name == "strict_mode":
+        import warnings
+
+        warnings.warn(
+            "Setting `replayai.strict_mode` is deprecated — use "
+            "`replayai.set_strict_mode(True)` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        set_strict_mode(bool(value))  # type: ignore[arg-type]
+        return
+    raise AttributeError(f"module 'replayai' has no attribute {name!r}")

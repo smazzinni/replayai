@@ -98,7 +98,7 @@ def _build_request(
     headers = {
         "Content-Type": "application/json",
         "Accept": accept,
-        "User-Agent": "replayai-python/0.7.1",
+        "User-Agent": "replayai-python/0.7.2",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -244,12 +244,21 @@ def _enforce_payload_budget(
     return new_payload
 
 
-def _build_payload(session: Dict[str, Any], cfg: "_config.Config") -> bytes:
-    """Strip internals, apply max_steps + payload-size truncation, serialize."""
+def _build_payload(
+    session: Dict[str, Any], cfg: "_config.Config"
+) -> tuple[bytes, bool]:
+    """Strip internals, apply max_steps + payload-size truncation, serialize.
+
+    Returns ``(body_bytes, truncated)`` where ``truncated`` is True if either
+    the step-count cap or the 5 MB payload budget caused steps to be dropped.
+    """
     payload = _strip_internal(session)
+    original_step_count = len(payload.get("steps") or [])
     payload["steps"] = _truncate_steps(list(payload.get("steps") or []), cfg)
     payload = _enforce_payload_budget(payload, cfg)
-    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    final_step_count = len(payload.get("steps") or [])
+    truncated = final_step_count < original_step_count or bool(payload.get("truncated"))
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8"), truncated
 
 
 # ---------------------------------------------------------------------------
@@ -259,15 +268,23 @@ def flush_session(session: Dict[str, Any]) -> Dict[str, Any]:
     """POST a recorded session to ``{API_URL}/api/sessions``.
 
     Returns the parsed JSON response (typically ``{"session": {...}}``).
+    If the payload was truncated (step-count cap or 5 MB budget), a
+    ``"truncated": True`` key is added to the returned dict so callers
+    can detect data loss.
+
     In non-strict mode, ``StoreError`` is caught and logged; this is the
     ONLY place the SDK returns an empty ``{}`` on failure — ``_do_request``
     itself always raises. In strict mode the error propagates.
     """
     cfg = _config.get_config()
-    body = _build_payload(session, cfg)
+    body, truncated = _build_payload(session, cfg)
     req = _build_request(_api_url("/api/sessions"), body=body, token=cfg.token)
     try:
-        return _do_request(req)
+        result = _do_request(req)
+        # Surface truncation to the caller so it's not silent data loss.
+        if truncated and isinstance(result, dict):
+            result["truncated"] = True
+        return result
     except StoreError as e:
         if cfg.strict or _config.strict_mode:
             raise

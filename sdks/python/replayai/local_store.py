@@ -10,6 +10,11 @@ This module is used by:
 
 The file format matches the API response shape so the dashboard can render
 both cloud-fetched and locally-stored sessions identically.
+
+**Security:** Session files are created with restrictive permissions
+(0600 on POSIX) so recorded inputs/outputs — which may contain secrets
+that slipped past redaction — aren't world-readable. The sessions
+directory is created with 0700.
 """
 from __future__ import annotations
 
@@ -22,12 +27,28 @@ from typing import Any, Dict, List, Optional
 from . import config as _config
 
 
+# Default file mode for session JSON files (owner read/write only).
+# On Windows this has no effect (chmod is a no-op), but the files inherit
+# the user's default ACL which is typically single-user anyway.
+_FILE_MODE = 0o600
+_DIR_MODE = 0o700
+
+
 def _storage_dir() -> str:
-    """Return the absolute path to the sessions directory."""
+    """Return the absolute path to the sessions directory.
+
+    Created with mode 0700 (owner-only) so other users on the system
+    can't read recorded session data.
+    """
     cfg = _config.get_config()
     base = cfg.storage_path
     sessions_dir = os.path.join(base, "sessions")
     os.makedirs(sessions_dir, exist_ok=True)
+    # Tighten permissions on the directory (best-effort; no-op on Windows).
+    try:
+        os.chmod(sessions_dir, _DIR_MODE)
+    except OSError:
+        pass
     return sessions_dir
 
 
@@ -42,6 +63,10 @@ def save_session(session: Dict[str, Any]) -> str:
 
     If the session already has an ``id`` (assigned by the API), use it.
     Otherwise generate a local id: ``ses_<slug>_<timestamp>``.
+
+    The file is created with mode 0600 (owner read/write only) so recorded
+    inputs/outputs — which may contain secrets that slipped past redaction —
+    aren't world-readable.
     """
     sessions_dir = _storage_dir()
 
@@ -59,11 +84,21 @@ def save_session(session: Dict[str, Any]) -> str:
 
     fname = f"{sid}.json"
     full = os.path.join(sessions_dir, fname)
+    data = json.dumps(out, ensure_ascii=False, indent=2).encode("utf-8")
+    # Write with O_CREAT | O_WRONLY | O_TRUNC and mode 0600.
+    # os.open respects the mode on file creation (unlike open() which uses
+    # the process umask). On Windows the mode bits are ignored.
+    fd = os.open(full, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _FILE_MODE)
     try:
-        with open(full, "w", encoding="utf-8") as fh:
-            json.dump(out, fh, ensure_ascii=False, indent=2)
+        os.write(fd, data)
+    finally:
+        os.close(fd)
+    # Belt-and-suspenders: chmod in case the file already existed (O_CREAT
+    # doesn't change mode on an existing file).
+    try:
+        os.chmod(full, _FILE_MODE)
     except OSError:
-        raise
+        pass
     return sid
 
 

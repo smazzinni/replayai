@@ -27,7 +27,20 @@ export declare function configure(opts: ConfigOptions): ResolvedConfig;
 export declare function getConfig(): ResolvedConfig;
 /** Reset to env-only config. Useful for tests. */
 export declare function resetConfig(): void;
-/** Module-level strict flag, mirrored from config.strict (parity with Python SDK). */
-export declare let strict_mode: boolean;
-export declare function _syncStrictFlag(): void;
+/**
+ * Get the module-level strict flag (mirrors `config.strict`).
+ * Use `setStrictMode()` to change it.
+ *
+ * Note: the Python SDK exposes `replayai.strict_mode` as a settable module
+ * attribute. TypeScript doesn't support settable module exports without a
+ * hack, so we use explicit get/set functions instead. This is safer than
+ * the `export let` pattern (which breaks when reassigned from another module).
+ */
+export declare function getStrictMode(): boolean;
+/** Set the module-level strict flag (updates config.strict too). */
+export declare function setStrictMode(value: boolean): void;
+/** @internal Kept for backward compatibility — prefer getStrictMode(). */
+export declare const _strictMode: {
+    readonly value: boolean;
+};
 //# sourceMappingURL=config.d.ts.map

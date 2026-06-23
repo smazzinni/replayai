@@ -22,7 +22,7 @@ import { mkdirSync } from "node:fs";
 import { getConfig, configure } from "./config.js";
 import { listSessions, getSession, getStats, type LocalSession } from "./local-store.js";
 
-const SDK_VERSION = "0.7.1";
+const SDK_VERSION = "0.7.2";
 
 // The dashboard HTML — a self-contained single-page app matching the
 // ReplayAI website's Live Demo design. Identical to the Python SDK's

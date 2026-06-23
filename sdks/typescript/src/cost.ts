@@ -1,5 +1,11 @@
 // ReplayAI TypeScript SDK — per-model cost estimation.
 // Rates are per 1,000,000 tokens in USD, matching the API's estimator.
+//
+// **Auto-update:** If the `REPLAYAI_COST_RATES_URL` environment variable is
+// set, the rate table is fetched from that URL on first use (cached for the
+// process lifetime). The URL must return JSON in the same format as
+// `DEFAULT_RATES` (a record of model name → {in, out}). If the fetch fails,
+// the built-in `DEFAULT_RATES` are used as a fallback.
 
 import type { SessionStep } from "./types.js";
 
@@ -23,18 +29,82 @@ export const DEFAULT_RATES: Record<string, Rate> = {
 };
 
 /** Fallback rate used when a model isn't in the table. Matches the API. */
-export const FALLBACK_RATE: Rate = DEFAULT_RATES["gpt-4o"];
+export const FALLBACK_RATE: Rate = DEFAULT_RATES["gpt-4o"]!;
+
+// ---------------------------------------------------------------------------
+// Rate-table loading with optional URL override.
+// ---------------------------------------------------------------------------
+let ratesCache: Record<string, Rate> | null = null;
+
+async function loadRatesFromUrl(): Promise<Record<string, Rate> | null> {
+  const url = process.env.REPLAYAI_COST_RATES_URL;
+  if (!url) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, unknown>;
+    // Validate shape: must be a record of model → {in, out}.
+    const validated: Record<string, Rate> = {};
+    for (const [model, rates] of Object.entries(data)) {
+      if (typeof rates !== "object" || rates === null) continue;
+      const r = rates as Record<string, unknown>;
+      if (typeof r.in !== "number" || typeof r.out !== "number") continue;
+      validated[model] = { in: r.in, out: r.out };
+    }
+    return Object.keys(validated).length > 0 ? validated : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return the active rate table.
+ *
+ * On first call, if `REPLAYAI_COST_RATES_URL` is set, rates are fetched
+ * from that URL and cached for the process lifetime. On failure, the
+ * built-in `DEFAULT_RATES` are used.
+ */
+export async function getRates(): Promise<Record<string, Rate>> {
+  if (ratesCache) return ratesCache;
+  const fetched = await loadRatesFromUrl();
+  ratesCache = fetched ?? { ...DEFAULT_RATES };
+  return ratesCache;
+}
+
+/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES. */
+export function getRatesSync(): Record<string, Rate> {
+  return ratesCache ?? { ...DEFAULT_RATES };
+}
+
+/** Clear the rate-table cache. Useful for tests. */
+export function _resetRatesCache(): void {
+  ratesCache = null;
+}
 
 /**
  * Estimate total USD cost across a list of steps.
  * Steps without a model use the fallback rate; steps without tokens
  * contribute zero.
+ *
+ * When `rates` is not supplied, the synchronous rate table is used
+ * (honors `REPLAYAI_COST_RATES_URL` if the cache has been populated via
+ * `getRates()`).
  */
-export function estimateCost(steps: Array<SessionStep | { model?: string | null; tokensIn?: number | null; tokensOut?: number | null }>): number {
+export function estimateCost(
+  steps: Array<SessionStep | { model?: string | null; tokensIn?: number | null; tokensOut?: number | null }>,
+): number {
+  const rateTable = getRatesSync();
+  const fallback = rateTable["gpt-4o"] ?? FALLBACK_RATE;
   let total = 0;
   for (const s of steps) {
     const model = s.model ?? undefined;
-    const rate = model && DEFAULT_RATES[model] ? DEFAULT_RATES[model] : FALLBACK_RATE;
+    const rate = model && rateTable[model] ? rateTable[model]! : fallback;
     const tokensIn = s.tokensIn ?? 0;
     const tokensOut = s.tokensOut ?? 0;
     total += (tokensIn / 1_000_000) * rate.in;
@@ -54,5 +124,5 @@ export function estimateStepCost(
 
 /** Read-only copy of the rate table. */
 export function getModelRates(): Record<string, Rate> {
-  return { ...DEFAULT_RATES };
+  return { ...getRatesSync() };
 }

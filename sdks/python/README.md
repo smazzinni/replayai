@@ -114,14 +114,61 @@ Environment variables (all optional):
 | `REPLAYAI_REDACT_STRICT` | `true` | Set `false` to disable entropy-based secret detection |
 | `REPLAYAI_TIMEOUT` | `30` | Per-request HTTP timeout (seconds) |
 | `REPLAYAI_MAX_STEPS` | `200` | Hard ceiling on steps persisted per session |
+| `REPLAYAI_COST_RATES_URL` | — | URL to fetch current model pricing (JSON: `{"model": {"in": float, "out": float}}`). Falls back to built-in rates on failure. |
 
 Programmatic override:
 
 ```python
 import replayai
 replayai.configure(project="support-agent", api_url="http://localhost:3000")
-replayai.strict_mode = True  # opt into hard failures
+replayai.set_strict_mode(True)  # opt into hard failures (was: replayai.strict_mode = True)
 ```
+
+## Storage modes
+
+The SDK supports three storage modes via `REPLAYAI_STORAGE` (or `configure(storage=...)`):
+
+| Mode | Behavior | Use case |
+| --- | --- | --- |
+| `cloud` (default) | POSTs sessions to the ReplayAI API at `REPLAYAI_API_URL`. | Production, shared dashboards, team collaboration. |
+| `local` | Saves sessions as JSON files to `./ReplayAI/sessions/`. No network calls. | Offline development, CI, local debugging with `replayai ui`. |
+| `both` | Saves locally AND POSTs to the API. | Hybrid: local backup + cloud visibility. |
+
+**Offline mode (no API needed):**
+
+```bash
+# Record locally (no API running)
+REPLAYAI_STORAGE=local replayai record my_agent.py
+
+# View in the dashboard
+replayai ui
+```
+
+Session files are saved to `./ReplayAI/sessions/*.json` with mode `0600` (owner read/write only) for security. The dashboard server reads from this directory automatically.
+
+## Comparing sessions
+
+`ReplaySession.compare()` runs a live callable under a trace and diffs it against the recorded session. It uses **LCS (Longest Common Subsequence) alignment** by step name+type, so an inserted or removed step doesn't cascade into false divergences for every subsequent step.
+
+```python
+from replayai import ReplaySession
+
+replay = ReplaySession("ses_8fa1")
+replay.mock("issue_refund", '{"refund_id":"ref_3391"}')
+
+result = replay.compare(
+    agent_callable=lambda msg: my_agent.run(msg),
+    inputs="I was charged twice",
+)
+
+print(result["matches"])           # True if no divergences
+print(result["step_count_loaded"]) # recorded step count
+print(result["step_count_live"])   # live step count
+for d in result["divergences"]:
+    print(f"  step {d['step']}: {d['field']} (loaded={d['loaded']!r}, live={d['live']!r})")
+```
+
+Divergence `field` values: `"output"`, `"status"`, `"model"` (aligned steps that differ), `"added"` (live step not in recording), `"removed"` (recorded step not in live run).
 
 ## Async
 
@@ -161,6 +208,33 @@ def handle(message: str) -> str:
 ```
 
 See `examples/quickstart.py` and `examples/langchain_demo.py` for runnable demos.
+
+## Windows
+
+The SDK works on Windows. A few notes:
+
+**PATH warning:** If you see `The script replayai.exe is installed in ... which is not on PATH`, use `python -m replayai` instead — it works identically:
+
+```powershell
+python -m replayai ui
+python -m replayai record my_agent.py
+```
+
+**PowerShell env vars:**
+
+```powershell
+# Set env vars for the current session
+$env:REPLAYAI_STORAGE = "local"
+$env:REPLAYAI_STORAGE_PATH = ".\ReplayAI"
+
+# Record + launch
+python -m replayai record my_agent.py
+python -m replayai ui
+```
+
+**File permissions:** Session files are created with restrictive permissions. On Windows, `chmod` is a no-op — files inherit the user's default ACL (typically single-user). The `0600`/`0700` modes are enforced on POSIX systems.
+
+**Firewall:** The dashboard server listens on `0.0.0.0:7373`. If Windows Firewall prompts, allow access for local development. To listen on localhost only, set `--port` and access via `http://localhost:7373`.
 
 ## License
 

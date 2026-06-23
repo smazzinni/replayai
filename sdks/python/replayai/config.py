@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -145,7 +146,10 @@ def _load_from_env() -> Config:
 
 
 # Module-level singleton. Imported throughout the SDK; mutated by `configure`.
+# Protected by `_config_lock` so concurrent `configure()` calls from multiple
+# threads don't race on the dataclass fields.
 _config: Config = _load_from_env()
+_config_lock = threading.Lock()
 
 # Module-level strict flag — also exposed as `replayai.strict_mode`.
 # Mirrored from the config so callers can do `replayai.strict_mode = True`.
@@ -153,8 +157,13 @@ strict_mode: bool = _config.strict
 
 
 def get_config() -> Config:
-    """Return the active Config singleton."""
-    return _config
+    """Return the active Config singleton.
+
+    Thread-safe: returns a consistent snapshot even if another thread is
+    calling ``configure()`` concurrently.
+    """
+    with _config_lock:
+        return _config
 
 
 def configure(
@@ -176,38 +185,68 @@ def configure(
 
     Only the supplied keyword arguments are changed; others retain their
     current value. Returns the updated Config for chaining.
+
+    Thread-safe: acquires a lock so concurrent calls don't interleave.
     """
     global strict_mode
-    if project is not None:
-        _config.project = project
-    if token is not None:
-        _config.token = token
-    if storage is not None:
-        _config.storage = storage
-    if storage_path is not None:
-        _config.storage_path = storage_path
-    if api_url is not None:
-        _config.api_url = api_url.rstrip("/")
-    if dashboard_url is not None:
-        _config.dashboard_url = dashboard_url
-    if sample_rate is not None:
-        _config.sample_rate = float(sample_rate)
-    if strict is not None:
-        _config.strict = bool(strict)
-        strict_mode = _config.strict
-    if timeout is not None:
-        _config.timeout = float(timeout)
-    if max_steps is not None:
-        _config.max_steps = int(max_steps)
-    if always_record_failures is not None:
-        _config.always_record_failures = bool(always_record_failures)
-    if redact_patterns is not None:
-        _config.redact_patterns = list(redact_patterns)
-        _config._recompile()
-    return _config
+    with _config_lock:
+        if project is not None:
+            _config.project = project
+        if token is not None:
+            _config.token = token
+        if storage is not None:
+            _config.storage = storage
+        if storage_path is not None:
+            _config.storage_path = storage_path
+        if api_url is not None:
+            _config.api_url = api_url.rstrip("/")
+        if dashboard_url is not None:
+            _config.dashboard_url = dashboard_url
+        if sample_rate is not None:
+            _config.sample_rate = float(sample_rate)
+        if strict is not None:
+            _config.strict = bool(strict)
+            strict_mode = _config.strict
+        if timeout is not None:
+            _config.timeout = float(timeout)
+        if max_steps is not None:
+            _config.max_steps = int(max_steps)
+        if always_record_failures is not None:
+            _config.always_record_failures = bool(always_record_failures)
+        if redact_patterns is not None:
+            _config.redact_patterns = list(redact_patterns)
+            _config._recompile()
+        return _config
 
 
 def _sync_strict_flag() -> None:
     """Keep the module-level strict_mode flag in sync with config.strict."""
     global strict_mode
-    strict_mode = _config.strict
+    with _config_lock:
+        strict_mode = _config.strict
+
+
+def _reload_from_env() -> Config:
+    """Force a reload of the config from environment variables.
+
+    Thread-safe. Used by the CLI to pick up env vars it sets after import.
+    """
+    global strict_mode
+    with _config_lock:
+        _config_new = _load_from_env()
+        # Copy fields onto the existing singleton so all references stay valid.
+        _config.project = _config_new.project
+        _config.token = _config_new.token
+        _config.storage = _config_new.storage
+        _config.storage_path = _config_new.storage_path
+        _config.api_url = _config_new.api_url
+        _config.dashboard_url = _config_new.dashboard_url
+        _config.sample_rate = _config_new.sample_rate
+        _config.strict = _config_new.strict
+        _config.timeout = _config_new.timeout
+        _config.max_steps = _config_new.max_steps
+        _config.always_record_failures = _config_new.always_record_failures
+        _config.redact_patterns = _config_new.redact_patterns
+        _config._recompile()
+        strict_mode = _config.strict
+        return _config

@@ -86,7 +86,7 @@ def _cmd_record(args: argparse.Namespace) -> int:
 
     # Force config reload so the env vars take effect.
     from . import config as _config
-    _config._config = _config._load_from_env()
+    _config._reload_from_env()
 
     print(f"[replayai] recording: {script}")
     print(f"  name:      {name}")

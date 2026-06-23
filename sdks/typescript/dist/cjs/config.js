@@ -2,12 +2,13 @@
 // ReplayAI TypeScript SDK — configuration.
 // Reads env vars on first access; `configure()` overrides programmatically.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.strict_mode = exports.DEFAULT_REDACT_PATTERNS = void 0;
+exports._strictMode = exports.DEFAULT_REDACT_PATTERNS = void 0;
 exports.resolveConfig = resolveConfig;
 exports.configure = configure;
 exports.getConfig = getConfig;
 exports.resetConfig = resetConfig;
-exports._syncStrictFlag = _syncStrictFlag;
+exports.getStrictMode = getStrictMode;
+exports.setStrictMode = setStrictMode;
 /** Default redaction patterns. Applied to every step's input/output. */
 exports.DEFAULT_REDACT_PATTERNS = [
     // OpenAI-style API keys (legacy + project + service-account + admin prefixes).
@@ -113,10 +114,22 @@ function resetConfig() {
     overrides = {};
     cached = null;
 }
-/** Module-level strict flag, mirrored from config.strict (parity with Python SDK). */
-exports.strict_mode = resolveConfig().strict;
-function _syncStrictFlag() {
-    // Re-import trick: reassign the exported let.
-    // (Called by configure via _sync below.)
+/**
+ * Get the module-level strict flag (mirrors `config.strict`).
+ * Use `setStrictMode()` to change it.
+ *
+ * Note: the Python SDK exposes `replayai.strict_mode` as a settable module
+ * attribute. TypeScript doesn't support settable module exports without a
+ * hack, so we use explicit get/set functions instead. This is safer than
+ * the `export let` pattern (which breaks when reassigned from another module).
+ */
+function getStrictMode() {
+    return getConfig().strict;
 }
+/** Set the module-level strict flag (updates config.strict too). */
+function setStrictMode(value) {
+    configure({ strict: value });
+}
+/** @internal Kept for backward compatibility — prefer getStrictMode(). */
+exports._strictMode = { get value() { return getStrictMode(); } };
 //# sourceMappingURL=config.js.map

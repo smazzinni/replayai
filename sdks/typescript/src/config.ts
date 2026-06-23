@@ -136,10 +136,23 @@ export function resetConfig(): void {
   cached = null;
 }
 
-/** Module-level strict flag, mirrored from config.strict (parity with Python SDK). */
-export let strict_mode: boolean = resolveConfig().strict;
-
-export function _syncStrictFlag(): void {
-  // Re-import trick: reassign the exported let.
-  // (Called by configure via _sync below.)
+/**
+ * Get the module-level strict flag (mirrors `config.strict`).
+ * Use `setStrictMode()` to change it.
+ *
+ * Note: the Python SDK exposes `replayai.strict_mode` as a settable module
+ * attribute. TypeScript doesn't support settable module exports without a
+ * hack, so we use explicit get/set functions instead. This is safer than
+ * the `export let` pattern (which breaks when reassigned from another module).
+ */
+export function getStrictMode(): boolean {
+  return getConfig().strict;
 }
+
+/** Set the module-level strict flag (updates config.strict too). */
+export function setStrictMode(value: boolean): void {
+  configure({ strict: value });
+}
+
+/** @internal Kept for backward compatibility — prefer getStrictMode(). */
+export const _strictMode = { get value() { return getStrictMode(); } };

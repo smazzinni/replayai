@@ -325,7 +325,17 @@ class TraceContext:
         # Persist: cloud (POST to API) and/or local (JSON file).
         try:
             if cfg.storage in ("cloud", "both"):
-                flush_session(self.session)
+                result = flush_session(self.session)
+                # Surface truncation flag on the session object so callers
+                # can detect data loss after the trace exits.
+                if isinstance(result, dict) and result.get("truncated"):
+                    self.session["__truncated"] = True
+                    print(
+                        "[replayai] warning: session payload was truncated "
+                        "(step-count cap or 5 MB budget exceeded). The "
+                        "dashboard will show a subset of steps.",
+                        file=sys.stderr,
+                    )
             if cfg.storage in ("local", "both"):
                 _local_persist(self.session)
         except Exception as e:  # noqa: BLE001

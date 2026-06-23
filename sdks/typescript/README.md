@@ -141,7 +141,7 @@ await recordStep({
 
 ### `ReplaySession`
 
-Load a recorded session and either re-run it or export it as a test.
+Load a recorded session and either re-run it, compare a live run against it, or export it as a test.
 
 ```typescript
 import { ReplaySession } from "@smazzinni/sdk";
@@ -150,11 +150,36 @@ const replay = new ReplaySession("ses_8fa1", { liveLlm: false });
 
 replay.mock("issue_refund", JSON.stringify({ refund_id: "ref_3391" }));
 
-const trace = await replay.run({ agent: "support-agent-v3", framework: "LangChain" });
+const trace = await replay.load();
 console.log(trace.stepCount, trace.status);
 
 const code = await replay.export("pytest"); // or "jest"
 ```
+
+### `compare()` — diff a live run against the recording
+
+`compare()` runs a live callable under a trace and diffs it against the loaded session. It uses **LCS (Longest Common Subsequence) alignment** by step name+type, so an inserted or removed step doesn't cascade into false divergences for every subsequent step.
+
+```typescript
+import { ReplaySession } from "@smazzinni/sdk";
+
+const replay = new ReplaySession("ses_8fa1");
+replay.mock("issue_refund", JSON.stringify({ refund_id: "ref_3391" }));
+
+const result = await replay.compare(
+  (msg: string) => myAgent.run(msg),
+  "I was charged twice",
+);
+
+console.log(result.matches);           // true if no divergences
+console.log(result.stepCountLoaded);   // recorded step count
+console.log(result.stepCountLive);     // live step count
+for (const d of result.divergences) {
+  console.log(`  step ${d.step}: ${d.field} (loaded=${d.loaded}, live=${d.live})`);
+}
+```
+
+Divergence `field` values: `"output"`, `"status"`, `"model"` (aligned steps that differ), `"added"` (live step not in recording), `"removed"` (recorded step not in live run).
 
 ### `configure(opts)`
 
@@ -164,7 +189,7 @@ Programmatic configuration. Same keys as the env vars below.
 configure({
   project: "support-agent",
   storage: "both",
-  storagePath: "./replays",
+  storagePath: "./ReplayAI",
   token: process.env.REPLAYAI_TOKEN!,
   apiUrl: "https://api.replayai.dev",
   sampleRate: 1.0,
@@ -172,12 +197,43 @@ configure({
 });
 ```
 
+### `getStrictMode()` / `setStrictMode()`
+
+```typescript
+import { getStrictMode, setStrictMode } from "@smazzinni/sdk";
+
+setStrictMode(true);  // opt into hard failures
+console.log(getStrictMode()); // true
+```
+
 ### `VERSION`
 
 ```typescript
 import { VERSION } from "@smazzinni/sdk";
-console.log(VERSION); // "0.7.1"
+console.log(VERSION); // "0.7.2"
 ```
+
+## Storage modes
+
+The SDK supports three storage modes via `REPLAYAI_STORAGE` (or `configure({ storage })`):
+
+| Mode | Behavior | Use case |
+| --- | --- | --- |
+| `cloud` (default) | POSTs sessions to the ReplayAI API at `REPLAYAI_API_URL`. | Production, shared dashboards, team collaboration. |
+| `local` | Saves sessions as JSON files to `./ReplayAI/sessions/`. No network calls. | Offline development, CI, local debugging with `replayai ui`. |
+| `both` | Saves locally AND POSTs to the API. | Hybrid: local backup + cloud visibility. |
+
+**Offline mode (no API needed):**
+
+```bash
+# Set storage mode + record
+REPLAYAI_STORAGE=local node my_agent.js
+
+# View in the dashboard
+npx replayai ui
+```
+
+Session files are saved to `./ReplayAI/sessions/*.json` with mode `0600` (owner read/write only) for security. The dashboard server reads from this directory automatically.
 
 ## Environment variables
 
@@ -195,6 +251,7 @@ console.log(VERSION); // "0.7.1"
 | `REPLAYAI_STRICT` | `false` | Raise on recording failures instead of warning |
 | `REPLAYAI_TIMEOUT` | `30000` | Per-request HTTP timeout (ms) |
 | `REPLAYAI_MAX_STEPS` | `200` | Hard ceiling on steps persisted per session |
+| `REPLAYAI_COST_RATES_URL` | — | URL to fetch current model pricing (JSON: `{"model": {"in": number, "out": number}}`). Falls back to built-in rates on failure. |
 
 ## Redaction
 
@@ -211,6 +268,28 @@ import { trace } from "@smazzinni/sdk";
 // CJS
 const { trace } = require("@smazzinni/sdk");
 ```
+
+## Windows
+
+The SDK works on Windows. A few notes:
+
+**npx works everywhere:** `npx replayai ui` works without any PATH configuration.
+
+**PowerShell env vars:**
+
+```powershell
+# Set env vars for the current session
+$env:REPLAYAI_STORAGE = "local"
+$env:REPLAYAI_STORAGE_PATH = ".\ReplayAI"
+
+# Record + launch
+node my_agent.js
+npx replayai ui
+```
+
+**File permissions:** Session files are created with restrictive permissions. On Windows, `chmod` is a no-op — files inherit the user's default ACL (typically single-user). The `0600`/`0700` modes are enforced on POSIX systems.
+
+**Firewall:** The dashboard server listens on `0.0.0.0:7373`. If Windows Firewall prompts, allow access for local development. To listen on localhost only, set `--port` and access via `http://localhost:7373`.
 
 ## License
 

@@ -23,7 +23,7 @@ const node_path_1 = require("node:path");
 const node_fs_1 = require("node:fs");
 const config_js_1 = require("./config.js");
 const local_store_js_1 = require("./local-store.js");
-const SDK_VERSION = "0.7.1";
+const SDK_VERSION = "0.7.2";
 // The dashboard HTML — a self-contained single-page app matching the
 // ReplayAI website's Live Demo design. Identical to the Python SDK's
 // dashboard_html.py.

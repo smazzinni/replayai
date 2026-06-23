@@ -1,11 +1,11 @@
 // ReplayAI TypeScript SDK — public entry point.
 
-import { configure, getConfig, resetConfig } from "./config.js";
+import { configure, getConfig, resetConfig, getStrictMode, setStrictMode } from "./config.js";
 import { currentSession, isSampled, trace, withTrace } from "./context.js";
 import { recordStep, recordStepSync } from "./steps.js";
 import { ReplaySession } from "./session.js";
 import { flushSession } from "./store.js";
-import { estimateCost, estimateStepCost } from "./cost.js";
+import { estimateCost, estimateStepCost, getRates, getRatesSync } from "./cost.js";
 import { redactText, redactOptional, redactMarker } from "./redact.js";
 import type {
   AgentProject,
@@ -32,7 +32,7 @@ import type {
 } from "./types.js";
 
 /** SDK version. */
-export const VERSION = "0.7.1";
+export const VERSION = "0.7.2";
 
 export {
   trace,
@@ -43,11 +43,15 @@ export {
   configure,
   getConfig,
   resetConfig,
+  getStrictMode,
+  setStrictMode,
   currentSession,
   ReplaySession,
   flushSession,
   estimateCost,
   estimateStepCost,
+  getRates,
+  getRatesSync,
   redactText,
   redactOptional,
   redactMarker,
@@ -89,11 +93,15 @@ const replayai = {
   configure,
   getConfig,
   resetConfig,
+  getStrictMode,
+  setStrictMode,
   currentSession,
   ReplaySession,
   flushSession,
   estimateCost,
   estimateStepCost,
+  getRates,
+  getRatesSync,
   redactText,
   redactOptional,
   redactMarker,

@@ -61,6 +61,12 @@ export declare class ReplaySession {
      * Returns a `CompareResult` with `matches` (true iff zero divergences),
      * `stepCountLoaded`, `stepCountLive`, and a list of per-step divergences.
      *
+     * **Diff algorithm:** Uses LCS (Longest Common Subsequence) alignment
+     * by step name+type so that an inserted/removed step doesn't cascade
+     * into false divergences for every subsequent step. Aligned pairs are
+     * compared field-by-field (output, status, model). Unaligned loaded
+     * steps are "removed"; unaligned live steps are "added".
+     *
      * If `load()` hasn't been called yet, it's called automatically.
      */
     compare<T>(agentFn: (inputs?: T) => unknown | Promise<unknown>, inputs?: T): Promise<CompareResult>;
