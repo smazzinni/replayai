@@ -1079,3 +1079,62 @@ Stage Summary:
 - v0.7.2 is live on all three channels (GitHub + PyPI + npm).
 - All 8 reported issues fixed in both SDKs.
 - Backward compatibility preserved (strict_mode read still works, compare() return shape unchanged).
+
+---
+Task ID: sdk-v0.7.3
+Agent: main (orchestrator)
+Task: Fix "no log file generated" bug + comprehensive audit of 42 issues. Publish v0.7.3.
+
+Work Log:
+- User reported: "when I run a script then there is no log file generated, which I can see in the replayai UI"
+- Root cause: Default storage mode was "cloud" in both SDKs. When no API server is running, the cloud POST fails, non-strict mode swallows the error, and NO local file is written. Users expect `replayai ui` to show their sessions but nothing is saved.
+- Ran a comprehensive audit (via subagent) that found 42 bugs across both SDKs.
+- Fixed the 18 most critical/high-severity bugs:
+
+CRITICAL FIXES:
+#1 Default storage=cloud → silent data loss. Changed to "local" in both SDKs.
+   Verified: running a script now creates ./ReplayAI/sessions/*.json immediately.
+#2 strict_mode __setattr__ was a silent no-op (PEP 562 doesn't support it).
+   Restored _ReplayAIModule __class__ swap with a real property descriptor.
+#3 TS estimateCost never fetched from REPLAYAI_COST_RATES_URL (getRatesSync was dead).
+   Now kicks off a background fetch on first call.
+#4 Cloud session id never extracted from API response (Python context._exit).
+   Now extracts result["session"]["id"] and stashes on self.session["id"].
+#5 ReplaySession.load() had no local-storage fallback. Now tries local first.
+#6 Dashboard /api/sessions reported wrong total (len of sliced list, not real count).
+   Added count_sessions() to both local stores.
+
+HIGH FIXES:
+#7 _truncate_steps dropped the error step. Now preserves error/failed steps.
+#8 sys.exit("string") crashed the CLI (int("string") → ValueError). Fixed.
+#9 sys.exit(0) marked trace as "failed". Now treats SystemExit(0/None) as success.
+#10 "both"+strict cloud failure prevented local persist. Separate try/except blocks.
+#12 compare() flushed in local mode (TS). Added skipFlush option to TraceOptions.
+#15 Dashboard bound to 0.0.0.0 with CORS * (security). Changed to 127.0.0.1 + localhost CORS.
+#16 compare() destroyed outer trace context (Python). Now saves/restores prev_session.
+#17 TS listSessions loaded full sessions into memory. Now strips steps early.
+#25 TS CLI help text had wrong defaults. Updated to match actual defaults.
+#26 TS CLI overwrote REPLAYAI_STORAGE_PATH env var with arg default. Fixed.
+#28 configure() didn't validate storage values. Now raises ValueError on invalid.
+#38 CLI --storage arg name was misleading. Renamed to --storage-path (legacy alias kept).
+
+Publishing:
+- GitHub: commit 7471a15 pushed to main.
+- PyPI: https://pypi.org/project/replayai-sdk/0.7.3/ (live, verified)
+- npm: https://registry.npmjs.org/@smazzinni/sdk/0.7.3 (live, verified)
+
+Verification (end-to-end from actual registries):
+- pip install replayai-sdk==0.7.3 → run a script → ./ReplayAI/sessions/*.json created ✓
+- replayai ui → dashboard shows the session with full step timeline ✓
+- strict_mode = True → get_strict_mode() returns True ✓
+- configure(storage='invalid') → ValueError ✓
+- sys.exit(0) → session status = "success" ✓
+- Dashboard total count correct ✓
+- Dashboard bound to 127.0.0.1 (not 0.0.0.0) ✓
+- npm: npx replayai version → "replayai-sdk/0.7.3" ✓
+
+Stage Summary:
+- v0.7.3 is live on all three channels (GitHub + PyPI + npm).
+- The #1 reported bug ("no log file generated") is FIXED — sessions are now saved locally by default.
+- 18 bugs fixed across both SDKs (6 critical, 12 high/medium).
+- Remaining 24 lower-severity bugs documented in the audit report for future rounds.
