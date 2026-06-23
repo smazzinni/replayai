@@ -1011,3 +1011,71 @@ Stage Summary:
 - `replayai record` defaults to local storage (was cloud → silent failure).
 - Local sessions always persist regardless of sample rate (was gated).
 - Website demo re-seeded and working.
+
+---
+Task ID: sdk-v0.7.2
+Agent: main (orchestrator)
+Task: Fix 8 issues in both SDKs (file perms, LCS diff, truncation, thread-safe config, LangChain, strict_mode, cost rates, docs). Publish v0.7.2.
+
+Work Log:
+- Fixed all 8 reported issues in both Python + TypeScript SDKs:
+
+1. **Local file permissions** (0600/0700):
+   - Python local_store.py: uses os.open() with explicit 0600 mode + chmod fallback. Directory created with 0700.
+   - TS local-store.ts: uses openSync() with 0600 mode + chmodSync fallback. Directory created with 0700 mode.
+   - Verified: session files are -rw------- on POSIX.
+
+2. **compare() LCS diff**:
+   - Python session.py: replaced index-based loop with _diff_steps() using LCS alignment by step name+type.
+   - TS session.ts: replaced index-based loop with diffSteps() using the same LCS algorithm.
+   - Aligned pairs compared field-by-field (output, status, model). Unaligned = "added"/"removed".
+   - Verified: inserting a step no longer cascades false divergences.
+
+3. **Payload truncation surfacing**:
+   - Python store.py: _build_payload() now returns (body, truncated) tuple. flush_session() adds "truncated": True to the response dict. context._exit() stashes __truncated on the session + prints a warning.
+   - TS: already had truncated flag in FlushResult (from v0.6.0) + warning. No change needed.
+
+4. **Thread-safe config**:
+   - Python config.py: added _config_lock (threading.Lock). get_config(), configure(), _reload_from_env() all acquire it. _reload_from_env() copies fields onto the existing singleton instead of replacing it.
+   - TS config.ts: replaced `export let strict_mode` with getStrictMode()/setStrictMode() functions (export let was broken when reassigned from another module).
+   - cli.py + dashboard_server.py: updated to use _reload_from_env() instead of direct _config reassignment.
+   - Verified: 4 threads × 100 configure() calls each = 0 errors.
+
+5. **LangChain callback robustness**:
+   - ReplayCallbackHandler no longer inherits from BaseCallbackHandler at class-definition time.
+   - Uses duck-typing: all callback methods defined directly on the class.
+   - Registers as a virtual subclass via ABCMeta.register() at import time so isinstance() passes.
+   - on_chain_start/end use depth tracking so only the outermost chain auto-flushes.
+   - All serialized params are Optional with or {} fallbacks.
+
+6. **strict_mode hack removed**:
+   - Replaced _ReplayAIModule __class__ swap with PEP 562 __getattr__/__setattr__.
+   - New API: get_strict_mode()/set_strict_mode().
+   - Backward compat: reading replayai.strict_mode still works; assigning prints a deprecation warning.
+
+7. **Cost rates auto-update**:
+   - Both SDKs: added REPLAYAI_COST_RATES_URL env var. When set, rates are fetched from that URL (cached for process lifetime). Falls back to DEFAULT_RATES on failure.
+   - Python: get_rates() with threading.Lock. TS: getRates() (async) + getRatesSync().
+   - Both exported from the package entry point.
+
+8. **Documentation gaps**:
+   - Both READMEs: new "Storage modes" section (cloud/local/both + offline example).
+   - Both READMEs: new "Comparing sessions" / "compare()" section with code example + divergence field reference.
+   - Both READMEs: new "Windows" section (PowerShell env vars, python -m replayai, firewall, file perms).
+   - Both env var tables: added REPLAYAI_COST_RATES_URL.
+   - Python README: strict_mode example → set_strict_mode().
+   - TS README: new getStrictMode()/setStrictMode() section, VERSION → 0.7.2.
+
+Publishing:
+- GitHub: commit b7cbbf5 pushed to main.
+- PyPI: https://pypi.org/project/replayai-sdk/0.7.2/ (live, verified)
+- npm: https://registry.npmjs.org/@smazzinni/sdk/0.7.2 (live, verified)
+
+Verification (end-to-end from actual registries):
+- pip install replayai-sdk==0.7.2: version 0.7.2, strict_mode get/set works, 10 cost rates, LCS diff produces 2 divergences (added+removed) for a 1-step insertion. ✓
+- npm install @smazzinni/sdk@0.7.2: version 0.7.2, strict get/set works, 10 cost rates. ✓
+
+Stage Summary:
+- v0.7.2 is live on all three channels (GitHub + PyPI + npm).
+- All 8 reported issues fixed in both SDKs.
+- Backward compatibility preserved (strict_mode read still works, compare() return shape unchanged).
