@@ -936,3 +936,78 @@ Unresolved / next-phase recommendations:
   (currently Python-only).
 - The dashboard server auto-refreshes every 5s; consider WebSocket support for
   instant updates.
+
+---
+Task ID: sdk-v0.7.1
+Agent: main (orchestrator)
+Task: SDK dashboard UI must match the website's Live Demo design. Default storage folder → ./ReplayAI. Fix all functional/logical errors. Re-seed website DB (was empty). Publish v0.7.1.
+
+Work Log:
+- User reported 7 issues. Addressed all:
+
+1. SDK UI matches website Live Demo:
+   - Rewrote both SDK dashboards (Python dashboard_html.py + TS dashboard-server.ts)
+     with a comprehensive single-page app mirroring the website's design:
+     - Dark theme (#0a0f0d bg) with teal/emerald primary accent (#34d399)
+     - Window chrome: traffic lights (red/yellow/green) + breadcrumbs + Refresh
+     - 6 stat cards: Sessions/Failed/Steps/Cost/Fail Rate/Avg Run with colored icons
+     - Sessions sidebar: status dots, name, duration/cost/steps/relative-time, ID
+     - Replay timeline: clickable scrubber bar with type-colored segments
+       (llm_call=sky, tool_call=amber, retrieval=emerald, decision=violet, error=rose)
+     - Step controls: restart/prev/next/last buttons
+     - Step detail: type badge + name + status, meta grid (model/duration/tokens/offset),
+       side-by-side input/output code blocks
+     - Auto-refresh every 5s; auto-selects first failed session on load
+
+2. Default storage folder → ./ReplayAI:
+   - Python: config.py + cli.py defaults changed from ./replays → ./ReplayAI
+   - TypeScript: config.ts + cli.ts defaults changed
+   - Both: sessions saved to ./ReplayAI/sessions/*.json
+
+3. replayai ui auto-discovers logs from the ReplayAI folder:
+   - The dashboard server reads from {storage_path}/sessions/*.json
+   - When launched, it auto-creates the folder if it doesn't exist
+   - No configuration needed — just run `replayai ui` from the project root
+
+4. Functional/logical error fixes:
+   - Python cli._cmd_record: was defaulting to storage=cloud (tried to POST to a
+     non-existent API → session lost). Now defaults to storage=local. --cloud flag
+     uses storage=both. Forces config reload so the recorded script picks up env vars.
+   - Python context._exit: when storage=local and not sampled, the session was
+     DROPPED (sampling gate ran before the local persist). Now: when storage
+     includes 'local', always persist regardless of sample rate.
+   - TypeScript context.withTrace: same fix — flush when storage=local/both even
+     if not sampled.
+   - Python local_store.get_stats: was missing avgDurationMs. Added.
+   - TypeScript local_store.getStats: was missing avgDurationMs. Added.
+
+5. Website #demo section couldn't see sessions:
+   - The DB was empty (seed data had been wiped). Re-ran `bun run db:seed`.
+   - Verified: /api/sessions?limit=4 now returns 4 sessions.
+
+6. SDK UI looks like demo UI: ✅ (VLM-verified — matches the website's dark theme,
+   stat cards, sessions sidebar, replay timeline with scrubber + step detail).
+
+7. Documentation updated:
+   - Both READMEs: new "Launching the dashboard" section with feature list + options.
+   - Env var tables: REPLAYAI_STORAGE_PATH default → ./ReplayAI.
+   - TS VERSION example → 0.7.1.
+
+Publishing:
+- GitHub: commit 206af74 pushed to main.
+- PyPI: https://pypi.org/project/replayai-sdk/0.7.1/ (live, verified)
+- npm: https://registry.npmjs.org/@smazzinni/sdk/0.7.1 (live, verified)
+
+Verification (end-to-end from actual registries):
+- pip install replayai-sdk==0.7.1 → replayai record agent.py → replayai ui
+  → dashboard shows the session with full step timeline (VLM-verified).
+- npm install @smazzinni/sdk@0.7.1 → npx replayai version → "replayai-sdk/0.7.1".
+- Website #demo: 4 sessions visible, API returns 200.
+
+Stage Summary:
+- v0.7.1 is live on all three channels (GitHub + PyPI + npm).
+- Both SDK dashboards now match the website's Live Demo design.
+- Default storage folder is ./ReplayAI (auto-created).
+- `replayai record` defaults to local storage (was cloud → silent failure).
+- Local sessions always persist regardless of sample rate (was gated).
+- Website demo re-seeded and working.
