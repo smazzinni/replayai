@@ -171,11 +171,21 @@ class ReplaySession:
     def _fetch(self) -> Dict[str, Any]:
         if self._cached is not None:
             return self._cached
-        result = get_session(self.session_id)
-        sess = result.get("session") if isinstance(result, dict) else None
+        # Try local storage first (the default storage mode). If not found
+        # locally, fall back to the cloud API.
+        from . import local_store
+        sess = local_store.get_session(self.session_id)
+        if sess is None:
+            # Not in local storage — try the cloud API.
+            try:
+                result = get_session(self.session_id)
+                sess = result.get("session") if isinstance(result, dict) else None
+            except Exception:
+                sess = None
         if not sess:
             raise RuntimeError(
-                f"session {self.session_id!r} not found in ReplayAI store"
+                f"session {self.session_id!r} not found in local storage "
+                f"or the ReplayAI cloud API"
             )
         self._cached = sess
         return sess
@@ -285,8 +295,10 @@ class ReplaySession:
         # funneling record_step output through the trace context. Since
         # the live trace records whatever the agent emits, we apply mocks
         # to the captured live steps after the fact as well.
-        live_ctx_token = None
+        from . import context as _ctxmod
+
         ctx: Optional[TraceContext] = None
+        prev_session = _ctxmod._current_session.get()  # save outer context
         try:
             ctx = trace(
                 f"compare:{self.session_id}",
@@ -307,16 +319,17 @@ class ReplaySession:
             raw_live_steps = list(live_session.get("steps", []))
             live_steps = self._apply_mocks(raw_live_steps)
         finally:
+            # Restore the outer trace context (don't destroy it).
+            # Skip flushing the comparison trace — we're only inspecting it.
             if ctx is not None:
-                # Skip flushing the comparison trace to the API — we're
-                # only inspecting it locally.
                 try:
-                    ctx._token_ctx = None  # prevent double-reset
-                    from . import context as _ctxmod
-
-                    _ctxmod._current_session.set(None)
+                    if ctx._token_ctx is not None:
+                        _ctxmod._current_session.reset(ctx._token_ctx)
+                    else:
+                        _ctxmod._current_session.set(prev_session)
+                    ctx._token_ctx = None
                 except Exception:  # noqa: BLE001
-                    pass
+                    _ctxmod._current_session.set(prev_session)
 
         divergences = _diff_steps(loaded_steps, live_steps)
 

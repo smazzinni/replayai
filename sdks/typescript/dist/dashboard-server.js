@@ -19,8 +19,8 @@ import { exec } from "node:child_process";
 import { join, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { getConfig, configure } from "./config.js";
-import { listSessions, getSession, getStats } from "./local-store.js";
-const SDK_VERSION = "0.7.2";
+import { listSessions, getSession, getStats, countSessions } from "./local-store.js";
+const SDK_VERSION = "0.7.3";
 // The dashboard HTML — a self-contained single-page app matching the
 // ReplayAI website's Live Demo design. Identical to the Python SDK's
 // dashboard_html.py.
@@ -679,14 +679,19 @@ setInterval(() => { loadStats(); loadSessions(); }, 5000);
 </script>
 </body>
 </html>`;
-function sendJSON(res, data, status = 200) {
+function sendJSON(res, data, status = 200, port) {
     const body = JSON.stringify(data);
-    res.writeHead(status, {
+    const headers = {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Length": Buffer.byteLength(body),
         "Cache-Control": "no-store",
-        "Access-Control-Allow-Origin": "*",
-    });
+    };
+    // Restrict CORS to localhost for security (prevents other websites
+    // on the network from reading recorded session data).
+    if (port) {
+        headers["Access-Control-Allow-Origin"] = `http://localhost:${port}`;
+    }
+    res.writeHead(status, headers);
     res.end(body);
 }
 function sendHTML(res, html, status = 200) {
@@ -733,36 +738,39 @@ export function startServer(opts) {
             return;
         }
         if (path === "/health") {
-            sendJSON(res, { ok: true, service: "replayai-dashboard", version: SDK_VERSION });
+            sendJSON(res, { ok: true, service: "replayai-dashboard", version: SDK_VERSION }, 200, port);
             return;
         }
         if (path === "/api/stats") {
-            sendJSON(res, getStats());
+            sendJSON(res, getStats(), 200, port);
             return;
         }
         if (path === "/api/sessions") {
-            const limit = parseInt(url.searchParams.get("limit") || "200", 10);
-            const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+            const limitRaw = parseInt(url.searchParams.get("limit") || "200", 10);
+            const offsetRaw = parseInt(url.searchParams.get("offset") || "0", 10);
+            const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 200;
+            const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
             const sessions = listSessions(limit, offset).map((s) => {
                 const { steps, ...rest } = s;
                 return { ...rest, stepCount: steps?.length ?? 0 };
             });
-            sendJSON(res, { sessions, total: sessions.length });
+            const total = countSessions();
+            sendJSON(res, { sessions, total, hasMore: offset + limit < total }, 200, port);
             return;
         }
         if (path.startsWith("/api/sessions/")) {
             const sid = decodeURIComponent(path.slice("/api/sessions/".length));
             const session = getSession(sid);
             if (!session) {
-                sendJSON(res, { error: "not found" }, 404);
+                sendJSON(res, { error: "not found" }, 404, port);
                 return;
             }
-            sendJSON(res, session);
+            sendJSON(res, session, 200, port);
             return;
         }
-        sendJSON(res, { error: "not found" }, 404);
+        sendJSON(res, { error: "not found" }, 404, port);
     });
-    server.listen(port, "0.0.0.0", () => {
+    server.listen(port, "127.0.0.1", () => {
         const url = `http://localhost:${port}`;
         console.log(`[replayai] dashboard server running at ${url}`);
         console.log(`[replayai] storage: ${absStorage}`);

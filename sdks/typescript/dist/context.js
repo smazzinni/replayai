@@ -230,19 +230,22 @@ export async function withTrace(name, opts, fn) {
         catch (err) {
             session.status = "failed";
             session.error = err;
-            // Errors always flush, even when not sampled.
-            try {
-                await endAndFlush(session);
-            }
-            catch (flushErr) {
-                if (cfg.strict)
-                    throw flushErr;
+            // Errors always flush, even when not sampled — unless skipFlush is set.
+            if (!opts?.skipFlush) {
+                try {
+                    await endAndFlush(session);
+                }
+                catch (flushErr) {
+                    if (cfg.strict)
+                        throw flushErr;
+                }
             }
             throw err;
         }
         // Success path: flush if sampled (cloud) OR if local storage is enabled
         // (so locally-recorded sessions always persist regardless of sample rate).
-        const shouldFlush = session.__sampled || cfg.storage === "local" || cfg.storage === "both";
+        // Skip entirely when skipFlush is set (used by compare()).
+        const shouldFlush = !opts?.skipFlush && (session.__sampled || cfg.storage === "local" || cfg.storage === "both");
         if (shouldFlush) {
             try {
                 await endAndFlush(session);

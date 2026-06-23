@@ -7,7 +7,7 @@ import { estimateCost, estimateStepCost, getRates, getRatesSync } from "./cost.j
 import { redactText, redactOptional, redactMarker } from "./redact.js";
 import type { AgentProject, AgentSession, CapturedException, CompareDivergence, CompareResult, ConfigOptions, ExportLang, InternalSession, LastFlushResult, MockEntry, MockMatchOptions, RecordStepInput, ReplaySessionOptions, RunOptions, SessionStatus, SessionStep, StackFrame, StepStatus, StepType, Trace, TraceOptions } from "./types.js";
 /** SDK version. */
-export declare const VERSION = "0.7.2";
+export declare const VERSION = "0.7.3";
 export { trace, withTrace, isSampled, recordStep, recordStepSync, configure, getConfig, resetConfig, getStrictMode, setStrictMode, currentSession, ReplaySession, flushSession, estimateCost, estimateStepCost, getRates, getRatesSync, redactText, redactOptional, redactMarker, };
 export type { AgentProject, AgentSession, CapturedException, CompareDivergence, CompareResult, ConfigOptions, ExportLang, InternalSession, LastFlushResult, MockEntry, MockMatchOptions, RecordStepInput, ReplaySessionOptions, RunOptions, SessionStatus, SessionStep, StackFrame, StepStatus, StepType, Trace, TraceOptions, };
 declare const replayai: {

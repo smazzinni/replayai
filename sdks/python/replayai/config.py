@@ -56,7 +56,7 @@ class Config:
 
     project: Optional[str] = None
     token: Optional[str] = None
-    storage: str = "cloud"
+    storage: str = "local"
     storage_path: str = "./ReplayAI"
     api_url: str = "http://localhost:3000"
     dashboard_url: str = "http://localhost:3000"
@@ -110,7 +110,7 @@ def _load_from_env() -> Config:
     """Build a Config from the documented environment variables."""
     project = os.environ.get("REPLAYAI_PROJECT")
     token = os.environ.get("REPLAYAI_TOKEN")
-    storage = os.environ.get("REPLAYAI_STORAGE", "cloud")
+    storage = os.environ.get("REPLAYAI_STORAGE", "local")
     storage_path = os.environ.get("REPLAYAI_STORAGE_PATH", "./ReplayAI")
     api_url = os.environ.get("REPLAYAI_API_URL", "http://localhost:3000")
     dashboard_url = os.environ.get("REPLAYAI_DASHBOARD_URL", "http://localhost:3000")
@@ -166,6 +166,9 @@ def get_config() -> Config:
         return _config
 
 
+_VALID_STORAGE_MODES = {"local", "cloud", "both"}
+
+
 def configure(
     *,
     project: Optional[str] = None,
@@ -187,8 +190,16 @@ def configure(
     current value. Returns the updated Config for chaining.
 
     Thread-safe: acquires a lock so concurrent calls don't interleave.
+
+    Raises ``ValueError`` if ``storage`` is not one of ``local``,
+    ``cloud``, or ``both``.
     """
     global strict_mode
+    if storage is not None and storage not in _VALID_STORAGE_MODES:
+        raise ValueError(
+            f"Invalid storage mode {storage!r}. Must be one of: "
+            f"{', '.join(sorted(_VALID_STORAGE_MODES))}"
+        )
     with _config_lock:
         if project is not None:
             _config.project = project

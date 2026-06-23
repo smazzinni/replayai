@@ -78,11 +78,11 @@ let overrides: ConfigOptions = {};
 export function resolveConfig(): ResolvedConfig {
   if (cached) return cached;
 
-  const storageRaw = overrides.storage ?? envString("REPLAYAI_STORAGE") ?? "cloud";
+  const storageRaw = overrides.storage ?? envString("REPLAYAI_STORAGE") ?? "local";
   const storage: StorageMode =
     storageRaw === "local" || storageRaw === "cloud" || storageRaw === "both"
       ? storageRaw
-      : "cloud";
+      : "local";
 
   let redactPatterns: RegExp[] | null = null;
   if (overrides.redactPatterns) {

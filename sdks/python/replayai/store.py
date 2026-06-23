@@ -98,7 +98,7 @@ def _build_request(
     headers = {
         "Content-Type": "application/json",
         "Accept": accept,
-        "User-Agent": "replayai-python/0.7.2",
+        "User-Agent": "replayai-python/0.7.3",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -186,19 +186,35 @@ def _do_request(req: urllib.request.Request) -> Dict[str, Any]:
 # Payload truncation
 # ---------------------------------------------------------------------------
 def _truncate_steps(steps: list, cfg: "_config.Config") -> list:
-    """Apply ``max_steps`` ceiling and 5 MB payload budget to a step list.
+    """Apply ``max_steps`` ceiling to a step list.
 
-    Returns a (possibly-truncated) list and emits warnings to stderr when
-    truncation occurs.
+    Always preserves steps whose type is ``error`` or status is ``failed``
+    (so the dashboard always shows why a session failed). Non-error steps
+    beyond the ceiling are dropped from the middle.
+
+    Emits a warning to stderr when truncation occurs.
     """
-    if len(steps) > cfg.max_steps:
-        print(
-            f"[replayai] warning: session has {len(steps)} steps; truncating to "
-            f"max_steps={cfg.max_steps}",
-            file=sys.stderr,
-        )
-        steps = steps[: cfg.max_steps]
-    return steps
+    if len(steps) <= cfg.max_steps:
+        return steps
+    # Always keep error/failed steps.
+    keep = [s for s in steps if s.get("type") == "error" or s.get("status") == "failed"]
+    # Fill the remaining budget with non-error steps (head + tail).
+    non_error = [s for s in steps if s not in keep]
+    budget = max(0, cfg.max_steps - len(keep))
+    if len(non_error) > budget:
+        # Keep first half + last half of non-error steps.
+        head = budget // 2
+        tail = budget - head
+        non_error = non_error[:head] + non_error[-tail:] if tail > 0 else non_error[:head]
+    combined = keep + non_error
+    # Re-sort by offset.
+    combined.sort(key=lambda s: int(s.get("offsetMs", s.get("t", 0)) or 0))
+    print(
+        f"[replayai] warning: session has {len(steps)} steps; truncating to "
+        f"max_steps={cfg.max_steps} (keeping all error/failed steps + head/tail of the rest)",
+        file=sys.stderr,
+    )
+    return combined
 
 
 def _enforce_payload_budget(

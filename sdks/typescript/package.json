@@ -1,6 +1,6 @@
 {
   "name": "@smazzinni/sdk",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "TypeScript SDK for ReplayAI — instrument JS/TS agents, record sessions, replay & export tests.",
   "license": "MIT",
   "type": "module",

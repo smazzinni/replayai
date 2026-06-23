@@ -44,7 +44,9 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # Restrict CORS to localhost for security (prevents other websites
+        # on the network from reading recorded session data).
+        self.send_header("Access-Control-Allow-Origin", "http://localhost:{}".format(self.server.server_address[1]))
         self.end_headers()
         self.wfile.write(body)
 
@@ -79,10 +81,17 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs
 
             qs = parse_qs(parsed.query)
-            limit = int(qs.get("limit", ["200"])[0])
-            offset = int(qs.get("offset", ["0"])[0])
+            try:
+                limit = int(qs.get("limit", ["200"])[0])
+            except (ValueError, TypeError):
+                limit = 200
+            try:
+                offset = int(qs.get("offset", ["0"])[0])
+            except (ValueError, TypeError):
+                offset = 0
             sessions = local_store.list_sessions(limit=limit, offset=offset)
-            self._send_json({"sessions": sessions, "total": len(sessions)})
+            total = local_store.count_sessions()
+            self._send_json({"sessions": sessions, "total": total, "hasMore": offset + limit < total})
             return
 
         if path.startswith("/api/sessions/"):
@@ -126,7 +135,7 @@ def start_server(
     sp = cfg.storage_path
     os.makedirs(os.path.join(sp, "sessions"), exist_ok=True)
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), _DashboardHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), _DashboardHandler)
     url = f"http://localhost:{port}"
 
     print(f"[replayai] dashboard server running at {url}")

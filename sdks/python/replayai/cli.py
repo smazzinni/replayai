@@ -34,7 +34,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     rec.add_argument("--name", default=None, help="Session name (default: script name).")
     rec.add_argument("--tags", default=None, help="Comma-separated tags.")
     rec.add_argument("--framework", default="Custom", help="Agent framework.")
-    rec.add_argument("--storage", default="./ReplayAI", help="Local storage path (default: ./ReplayAI).")
+    rec.add_argument("--storage-path", default="./ReplayAI", dest="storage_path", help="Local storage path (default: ./ReplayAI).")
+    rec.add_argument("--storage", default=None, dest="storage_path_legacy", help="Deprecated alias for --storage-path.")
     rec.add_argument("--cloud", action="store_true", help="Also sync to cloud API (storage=both).")
 
     # --- test ---
@@ -46,7 +47,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     # --- ui ---
     ui = sub.add_parser("ui", help="Start the ReplayAI dashboard (self-contained server).")
     ui.add_argument("--port", type=int, default=7373, help="Port (default: 7373).")
-    ui.add_argument("--storage", default="./ReplayAI", help="Local storage path (default: ./ReplayAI).")
+    ui.add_argument("--storage-path", default="./ReplayAI", dest="storage_path", help="Local storage path (default: ./ReplayAI).")
+    ui.add_argument("--storage", default=None, dest="storage_path_legacy", help="Deprecated alias for --storage-path.")
     ui.add_argument("--cloud", action="store_true", help="Use cloud sync (still serves the local UI).")
     ui.add_argument("--token", default=None, help="Cloud API token.")
     ui.add_argument("--no-browser", action="store_true", help="Don't auto-open the browser.")
@@ -75,6 +77,11 @@ def _cmd_record(args: argparse.Namespace) -> int:
     tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
     project = args.project or os.environ.get("REPLAYAI_PROJECT")
 
+    # Resolve storage path: --storage-path takes precedence, --storage is legacy.
+    storage_path = getattr(args, "storage_path", "./ReplayAI")
+    if getattr(args, "storage_path_legacy", None):
+        storage_path = args.storage_path_legacy
+
     # Default to local storage so the recorded session is visible in the
     # dashboard without needing a running cloud API. Users can override with
     # REPLAYAI_STORAGE=cloud or --cloud.
@@ -82,7 +89,7 @@ def _cmd_record(args: argparse.Namespace) -> int:
         os.environ.setdefault("REPLAYAI_STORAGE", "both")
     else:
         os.environ.setdefault("REPLAYAI_STORAGE", "local")
-    os.environ.setdefault("REPLAYAI_STORAGE_PATH", args.storage)
+    os.environ.setdefault("REPLAYAI_STORAGE_PATH", storage_path)
 
     # Force config reload so the env vars take effect.
     from . import config as _config
@@ -106,8 +113,16 @@ def _cmd_record(args: argparse.Namespace) -> int:
         return 0
     except SystemExit as e:
         # Script called sys.exit() — that's fine, the trace still flushed.
-        print(f"[replayai] session recorded (script exited with code {e.code})")
-        return 0 if e.code is None else int(e.code)
+        # e.code can be None (clean), int (exit code), or str (error message).
+        if e.code is None:
+            print(f"[replayai] session recorded (script exited cleanly)")
+            return 0
+        if isinstance(e.code, int):
+            print(f"[replayai] session recorded (script exited with code {e.code})")
+            return e.code
+        # String exit code (e.g., sys.exit("error message")) — treat as failure.
+        print(f"[replayai] session recorded (script exited with error: {e.code})")
+        return 1
     except Exception as e:
         print(f"[replayai] error: {e}", file=sys.stderr)
         return 1
@@ -157,19 +172,24 @@ def _cmd_ui(args: argparse.Namespace) -> int:
     """
     from . import dashboard_server
 
+    # Resolve storage path: --storage-path takes precedence, --storage is legacy.
+    storage_path = getattr(args, "storage_path", "./ReplayAI")
+    if getattr(args, "storage_path_legacy", None):
+        storage_path = args.storage_path_legacy
+
     if args.cloud or args.token:
         if args.token:
             os.environ["REPLAYAI_TOKEN"] = args.token
         print(f"[replayai] starting dashboard in cloud mode on port {args.port}")
     else:
         os.environ.setdefault("REPLAYAI_STORAGE", "local")
-        os.environ.setdefault("REPLAYAI_STORAGE_PATH", args.storage)
+        os.environ.setdefault("REPLAYAI_STORAGE_PATH", storage_path)
         print(f"[replayai] starting dashboard in local mode on port {args.port}")
-        print(f"  storage: {os.path.abspath(args.storage)}")
+        print(f"  storage: {os.path.abspath(storage_path)}")
 
     return dashboard_server.start_server(
         port=args.port,
-        storage_path=args.storage,
+        storage_path=storage_path,
         open_browser=not args.no_browser,
     )
 

@@ -22,7 +22,7 @@ from .steps import arecord_step, record_step
 from .store import StoreError, dashboard_url_for, flush_session
 from .subprocess_helper import get_session_data, session_context, set_session_data
 
-__version__ = "0.7.2"
+__version__ = "0.7.3"
 
 __all__ = [
     "__version__",
@@ -91,19 +91,30 @@ def set_strict_mode(value: bool) -> None:
     configure(strict=bool(value))
 
 
-# Backward compatibility: `replayai.strict_mode` (read) still works via
-# module-level __getattr__ (PEP 562, Python 3.7+). Assignment is intercepted
-# by __setattr__ to print a deprecation warning pointing to set_strict_mode().
-# This is the clean, supported way to have a module-level property without
-# swapping __class__ (which broke type checkers and some embeddable builds).
-def __getattr__(name: str):  # type: ignore[no-untyped-def]
-    if name == "strict_mode":
+# Backward compatibility: `replayai.strict_mode` (read AND write) still works.
+#
+# PEP 562 only supports module-level __getattr__, NOT __setattr__. To support
+# both reading and writing `replayai.strict_mode`, we swap the module's
+# __class__ to a ModuleType subclass with a property descriptor. This is the
+# documented mechanism for module-level properties and works on Python 3.7+.
+#
+# The previous v0.7.2 approach (__setattr__ function) was a silent no-op
+# because PEP 562 doesn't invoke module-level __setattr__ — the assignment
+# just created a plain module attribute, bypassing the proxy to configure().
+#
+# Reading `replayai.strict_mode` calls the property getter → get_strict_mode().
+# Writing `replayai.strict_mode = True` calls the property setter →
+# set_strict_mode(True) with a DeprecationWarning.
+import sys as _sys
+
+
+class _ReplayAIModule(_sys.modules[__name__].__class__):
+    @property
+    def strict_mode(self) -> bool:  # type: ignore[override]
         return get_strict_mode()
-    raise AttributeError(f"module 'replayai' has no attribute {name!r}")
 
-
-def __setattr__(name: str, value: object) -> None:  # type: ignore[no-untyped-def]
-    if name == "strict_mode":
+    @strict_mode.setter
+    def strict_mode(self, value: bool) -> None:  # type: ignore[override]
         import warnings
 
         warnings.warn(
@@ -112,6 +123,7 @@ def __setattr__(name: str, value: object) -> None:  # type: ignore[no-untyped-de
             DeprecationWarning,
             stacklevel=2,
         )
-        set_strict_mode(bool(value))  # type: ignore[arg-type]
-        return
-    raise AttributeError(f"module 'replayai' has no attribute {name!r}")
+        set_strict_mode(bool(value))
+
+
+_sys.modules[__name__].__class__ = _ReplayAIModule

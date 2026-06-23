@@ -70,6 +70,9 @@ export interface TraceOptions {
   agent?: string;
   /** Per-call override of the sample rate (0.0–1.0). */
   sampleRate?: number;
+  /** When true, skip all persistence (cloud + local). Used internally by
+   *  `compare()` to avoid polluting the session store with comparison runs. */
+  skipFlush?: boolean;
 }
 
 /** Lightweight view of a recorded/replayed trace. */

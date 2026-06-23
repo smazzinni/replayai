@@ -55,10 +55,10 @@ let overrides = {};
 export function resolveConfig() {
     if (cached)
         return cached;
-    const storageRaw = overrides.storage ?? envString("REPLAYAI_STORAGE") ?? "cloud";
+    const storageRaw = overrides.storage ?? envString("REPLAYAI_STORAGE") ?? "local";
     const storage = storageRaw === "local" || storageRaw === "cloud" || storageRaw === "both"
         ? storageRaw
-        : "cloud";
+        : "local";
     let redactPatterns = null;
     if (overrides.redactPatterns) {
         redactPatterns = overrides.redactPatterns.map((p) => typeof p === "string" ? safeRegex(p) : p);

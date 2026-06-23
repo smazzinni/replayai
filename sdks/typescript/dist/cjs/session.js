@@ -1,6 +1,39 @@
 "use strict";
 // ReplayAI TypeScript SDK — ReplaySession: replay a recorded session and
 // export it as a test. Wraps GET /api/sessions/:id and /export.
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReplaySession = void 0;
 const store_js_1 = require("./store.js");
@@ -116,6 +149,9 @@ class ReplaySession {
     /**
      * Fetch the session and return a `Trace` view of it.
      *
+     * Tries local storage first (the default storage mode). If not found
+     * locally, falls back to the cloud API.
+     *
      * The `agent`/`framework` opts are accepted for backward compatibility only;
      * a deprecation warning is emitted when supplied. The session's stored
      * agent/framework always take precedence.
@@ -124,12 +160,27 @@ class ReplaySession {
         if (opts && (opts.agent || opts.framework)) {
             console.warn("[replayai] ReplaySession.load(): `agent` and `framework` parameters are deprecated and ignored — the recorded session's values are used");
         }
-        const result = await (0, store_js_1.fetchSession)(this.sessionId);
-        if (!result.ok) {
-            throw new Error(`ReplaySession.load: GET /api/sessions/${this.sessionId} → ${result.status} ${result.body}`);
+        // Try local storage first.
+        let session;
+        try {
+            const { getSession } = await Promise.resolve().then(() => __importStar(require("./local-store.js")));
+            const local = getSession(this.sessionId);
+            if (local) {
+                session = local;
+            }
         }
-        const payload = result.session;
-        const session = payload.session;
+        catch {
+            /* local-store not available */
+        }
+        // Fall back to the cloud API.
+        if (!session) {
+            const result = await (0, store_js_1.fetchSession)(this.sessionId);
+            if (!result.ok) {
+                throw new Error(`ReplaySession.load: session ${this.sessionId} not found in local storage or cloud API (HTTP ${result.status})`);
+            }
+            const payload = result.session;
+            session = payload.session;
+        }
         if (!session) {
             throw new Error(`ReplaySession.load: API response missing \`session\` field`);
         }
@@ -190,7 +241,7 @@ class ReplaySession {
         // re-apply mocks to live-recorded steps so the comparison is apples-to-
         // apples with the loaded (mocked) trace.
         let liveSession = (0, context_js_1.currentSession)();
-        await (0, context_js_1.withTrace)(`${this.sessionId}-compare`, { tags: ["compare"], sampleRate: 0 }, // never flush a compare run
+        await (0, context_js_1.withTrace)(`${this.sessionId}-compare`, { tags: ["compare"], sampleRate: 0, skipFlush: true }, // never flush a compare run
         async () => {
             liveSession = (0, context_js_1.currentSession)();
             await agentFn(inputs);

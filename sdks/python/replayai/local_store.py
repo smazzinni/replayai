@@ -131,6 +131,15 @@ def list_sessions(limit: int = 200, offset: int = 0) -> List[Dict[str, Any]]:
     return sessions[offset : offset + limit]
 
 
+def count_sessions() -> int:
+    """Return the total number of locally-stored sessions (without loading content)."""
+    sessions_dir = _storage_dir()
+    try:
+        return sum(1 for f in os.listdir(sessions_dir) if f.endswith(".json"))
+    except FileNotFoundError:
+        return 0
+
+
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
     """Return a single session dict (with steps), or None if not found."""
     sessions_dir = _storage_dir()

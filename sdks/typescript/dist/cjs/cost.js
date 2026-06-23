@@ -34,6 +34,7 @@ exports.FALLBACK_RATE = exports.DEFAULT_RATES["gpt-4o"];
 // Rate-table loading with optional URL override.
 // ---------------------------------------------------------------------------
 let ratesCache = null;
+let ratesFetchStarted = false;
 async function loadRatesFromUrl() {
     const url = process.env.REPLAYAI_COST_RATES_URL;
     if (!url)
@@ -79,13 +80,27 @@ async function getRates() {
     ratesCache = fetched ?? { ...exports.DEFAULT_RATES };
     return ratesCache;
 }
-/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES. */
+/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES.
+ *
+ *  On first call, if `REPLAYAI_COST_RATES_URL` is set, kicks off a background
+ *  fetch (fire-and-forget) so subsequent calls pick up the fetched rates.
+ *  This ensures `estimateCost()` (which is sync) eventually uses the URL
+ *  rates without blocking on a network call. */
 function getRatesSync() {
+    if (!ratesCache && !ratesFetchStarted) {
+        ratesFetchStarted = true;
+        // Fire-and-forget: populate the cache for subsequent calls.
+        loadRatesFromUrl().then((fetched) => {
+            if (fetched)
+                ratesCache = fetched;
+        }).catch(() => { });
+    }
     return ratesCache ?? { ...exports.DEFAULT_RATES };
 }
 /** Clear the rate-table cache. Useful for tests. */
 function _resetRatesCache() {
     ratesCache = null;
+    ratesFetchStarted = false;
 }
 /**
  * Estimate total USD cost across a list of steps.

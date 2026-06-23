@@ -15,7 +15,12 @@ export declare const FALLBACK_RATE: Rate;
  * built-in `DEFAULT_RATES` are used.
  */
 export declare function getRates(): Promise<Record<string, Rate>>;
-/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES. */
+/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES.
+ *
+ *  On first call, if `REPLAYAI_COST_RATES_URL` is set, kicks off a background
+ *  fetch (fire-and-forget) so subsequent calls pick up the fetched rates.
+ *  This ensures `estimateCost()` (which is sync) eventually uses the URL
+ *  rates without blocking on a network call. */
 export declare function getRatesSync(): Record<string, Rate>;
 /** Clear the rate-table cache. Useful for tests. */
 export declare function _resetRatesCache(): void;

@@ -131,6 +131,9 @@ export class ReplaySession {
   /**
    * Fetch the session and return a `Trace` view of it.
    *
+   * Tries local storage first (the default storage mode). If not found
+   * locally, falls back to the cloud API.
+   *
    * The `agent`/`framework` opts are accepted for backward compatibility only;
    * a deprecation warning is emitted when supplied. The session's stored
    * agent/framework always take precedence.
@@ -141,14 +144,31 @@ export class ReplaySession {
         "[replayai] ReplaySession.load(): `agent` and `framework` parameters are deprecated and ignored — the recorded session's values are used",
       );
     }
-    const result = await fetchSession(this.sessionId);
-    if (!result.ok) {
-      throw new Error(
-        `ReplaySession.load: GET /api/sessions/${this.sessionId} → ${result.status} ${result.body}`,
-      );
+
+    // Try local storage first.
+    let session: AgentSession | undefined;
+    try {
+      const { getSession } = await import("./local-store.js");
+      const local = getSession(this.sessionId);
+      if (local) {
+        session = local as unknown as AgentSession;
+      }
+    } catch {
+      /* local-store not available */
     }
-    const payload = result.session as { session?: AgentSession };
-    const session = payload.session;
+
+    // Fall back to the cloud API.
+    if (!session) {
+      const result = await fetchSession(this.sessionId);
+      if (!result.ok) {
+        throw new Error(
+          `ReplaySession.load: session ${this.sessionId} not found in local storage or cloud API (HTTP ${result.status})`,
+        );
+      }
+      const payload = result.session as { session?: AgentSession };
+      session = payload.session;
+    }
+
     if (!session) {
       throw new Error(`ReplaySession.load: API response missing \`session\` field`);
     }
@@ -218,7 +238,7 @@ export class ReplaySession {
     let liveSession = currentSession();
     await withTrace(
       `${this.sessionId}-compare`,
-      { tags: ["compare"], sampleRate: 0 }, // never flush a compare run
+      { tags: ["compare"], sampleRate: 0, skipFlush: true }, // never flush a compare run
       async () => {
         liveSession = currentSession();
         await agentFn(inputs);

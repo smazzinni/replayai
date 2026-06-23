@@ -280,7 +280,17 @@ class TraceContext:
             self.session["costUsd"] = 0.0
 
         # Derive final status from exception / step statuses.
-        if exc is not None:
+        # Special-case SystemExit(0) or SystemExit(None) — these are clean
+        # exits, NOT failures. Only treat SystemExit(non-zero) or other
+        # exceptions as failures.
+        is_clean_exit = (
+            exc is not None
+            and exc_type is not None
+            and issubclass(exc_type, SystemExit)
+            and (getattr(exc, "code", None) is None
+                 or (isinstance(getattr(exc, "code", None), int) and exc.code == 0))
+        )
+        if exc is not None and not is_clean_exit:
             self.session["status"] = "failed"
             # Capture the exception as a final error step so the dashboard
             # shows why it failed. The output is structured JSON (per the
@@ -323,25 +333,37 @@ class TraceContext:
                 return
 
         # Persist: cloud (POST to API) and/or local (JSON file).
-        try:
-            if cfg.storage in ("cloud", "both"):
+        # Cloud and local are in separate try/except blocks so a cloud
+        # failure doesn't prevent local persistence (and vice versa).
+        if cfg.storage in ("cloud", "both"):
+            try:
                 result = flush_session(self.session)
-                # Surface truncation flag on the session object so callers
-                # can detect data loss after the trace exits.
-                if isinstance(result, dict) and result.get("truncated"):
-                    self.session["__truncated"] = True
-                    print(
-                        "[replayai] warning: session payload was truncated "
-                        "(step-count cap or 5 MB budget exceeded). The "
-                        "dashboard will show a subset of steps.",
-                        file=sys.stderr,
-                    )
-            if cfg.storage in ("local", "both"):
+                # Extract the cloud-assigned session id + dashboard URL.
+                if isinstance(result, dict):
+                    cloud_id = result.get("session", {}).get("id") if isinstance(result.get("session"), dict) else None
+                    if cloud_id:
+                        self.session["id"] = cloud_id
+                    # Surface truncation flag.
+                    if result.get("truncated"):
+                        self.session["__truncated"] = True
+                        print(
+                            "[replayai] warning: session payload was truncated "
+                            "(step-count cap or 5 MB budget exceeded). The "
+                            "dashboard will show a subset of steps.",
+                            file=sys.stderr,
+                        )
+            except Exception as e:  # noqa: BLE001
+                if cfg.strict or _config.strict_mode:
+                    raise RecordingError(f"ReplayAI cloud flush failed: {e}") from e
+                print(f"[replayai] warning: cloud flush failed: {e}", file=sys.stderr)
+
+        if cfg.storage in ("local", "both"):
+            try:
                 _local_persist(self.session)
-        except Exception as e:  # noqa: BLE001
-            if cfg.strict or _config.strict_mode:
-                raise RecordingError(f"ReplayAI recording failed: {e}") from e
-            print(f"[replayai] warning: failed to flush session: {e}", file=sys.stderr)
+            except Exception as e:  # noqa: BLE001
+                if cfg.strict or _config.strict_mode:
+                    raise RecordingError(f"ReplayAI local persist failed: {e}") from e
+                print(f"[replayai] warning: local persist failed: {e}", file=sys.stderr)
 
     # ----- public step recording -----
     def record_step(self, **step: Any) -> None:

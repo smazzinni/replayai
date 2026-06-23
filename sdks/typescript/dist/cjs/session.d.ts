@@ -44,6 +44,9 @@ export declare class ReplaySession {
     /**
      * Fetch the session and return a `Trace` view of it.
      *
+     * Tries local storage first (the default storage mode). If not found
+     * locally, falls back to the cloud API.
+     *
      * The `agent`/`framework` opts are accepted for backward compatibility only;
      * a deprecation warning is emitted when supplied. The session's stored
      * agent/framework always take precedence.

@@ -35,6 +35,7 @@ export const FALLBACK_RATE: Rate = DEFAULT_RATES["gpt-4o"]!;
 // Rate-table loading with optional URL override.
 // ---------------------------------------------------------------------------
 let ratesCache: Record<string, Rate> | null = null;
+let ratesFetchStarted = false;
 
 async function loadRatesFromUrl(): Promise<Record<string, Rate> | null> {
   const url = process.env.REPLAYAI_COST_RATES_URL;
@@ -77,14 +78,27 @@ export async function getRates(): Promise<Record<string, Rate>> {
   return ratesCache;
 }
 
-/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES. */
+/** Synchronous variant — uses the cache or falls back to DEFAULT_RATES.
+ *
+ *  On first call, if `REPLAYAI_COST_RATES_URL` is set, kicks off a background
+ *  fetch (fire-and-forget) so subsequent calls pick up the fetched rates.
+ *  This ensures `estimateCost()` (which is sync) eventually uses the URL
+ *  rates without blocking on a network call. */
 export function getRatesSync(): Record<string, Rate> {
+  if (!ratesCache && !ratesFetchStarted) {
+    ratesFetchStarted = true;
+    // Fire-and-forget: populate the cache for subsequent calls.
+    loadRatesFromUrl().then((fetched) => {
+      if (fetched) ratesCache = fetched;
+    }).catch(() => { /* ignore */ });
+  }
   return ratesCache ?? { ...DEFAULT_RATES };
 }
 
 /** Clear the rate-table cache. Useful for tests. */
 export function _resetRatesCache(): void {
   ratesCache = null;
+  ratesFetchStarted = false;
 }
 
 /**
