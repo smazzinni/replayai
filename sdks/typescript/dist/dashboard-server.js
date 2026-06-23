@@ -189,13 +189,9 @@ export function startServer(opts) {
         if (path === "/api/sessions") {
             const limit = parseInt(url.searchParams.get("limit") || "200", 10);
             const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-            const sessions = listSessions(limit, offset).map((s) => ({
-                ...s,
-                stepCount: s.steps?.length ?? 0,
-            }));
-            // Strip steps from the list view.
-            sessions.forEach((s) => {
-                delete s.steps;
+            const sessions = listSessions(limit, offset).map((s) => {
+                const { steps, ...rest } = s;
+                return { ...rest, stepCount: steps?.length ?? 0 };
             });
             sendJSON(res, { sessions, total: sessions.length });
             return;

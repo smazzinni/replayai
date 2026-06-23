@@ -16,7 +16,7 @@ import { exec } from "node:child_process";
 import { join, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { getConfig, configure } from "./config.js";
-import { listSessions, getSession, getStats } from "./local-store.js";
+import { listSessions, getSession, getStats, type LocalSession } from "./local-store.js";
 
 const SDK_VERSION = "0.7.0";
 
@@ -204,13 +204,9 @@ export function startServer(opts: {
     if (path === "/api/sessions") {
       const limit = parseInt(url.searchParams.get("limit") || "200", 10);
       const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-      const sessions = listSessions(limit, offset).map((s) => ({
-        ...s,
-        stepCount: s.steps?.length ?? 0,
-      }));
-      // Strip steps from the list view.
-      sessions.forEach((s) => {
-        delete (s as { steps?: unknown }).steps;
+      const sessions = listSessions(limit, offset).map((s: LocalSession) => {
+        const { steps, ...rest } = s;
+        return { ...rest, stepCount: steps?.length ?? 0 };
       });
       sendJSON(res, { sessions, total: sessions.length });
       return;
