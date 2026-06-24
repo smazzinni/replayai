@@ -59,6 +59,10 @@ export interface TraceOptions {
     /** When true, skip all persistence (cloud + local). Used internally by
      *  `compare()` to avoid polluting the session store with comparison runs. */
     skipFlush?: boolean;
+    /** When true and there's an active trace, append steps to the existing
+     *  session instead of creating a new one. Use this to group multiple
+     *  decorated calls into one logical session. */
+    inherit?: boolean;
 }
 /** Lightweight view of a recorded/replayed trace. */
 export interface Trace {

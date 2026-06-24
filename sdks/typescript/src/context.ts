@@ -43,6 +43,26 @@ function shouldSample(rate: number): boolean {
   return Math.random() < rate;
 }
 
+/** Valid tag pattern — alphanumeric, underscore, hyphen. No commas (the API
+ *  uses commas as a separator), no whitespace, no control chars. */
+const VALID_TAG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/** Validate and sanitize a list of tags. */
+function validateTags(tags: string[]): string[] {
+  const out: string[] = [];
+  for (let t of tags) {
+    if (typeof t !== "string") continue;
+    t = t.trim().slice(0, 64);
+    if (!t) continue;
+    if (!VALID_TAG.test(t)) {
+      t = t.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64);
+      if (!t || !VALID_TAG.test(t)) t = "tag";
+    }
+    out.push(t);
+  }
+  return out;
+}
+
 function startSession(
   name: string,
   opts: TraceOptions | undefined,
@@ -246,11 +266,24 @@ export async function withTrace<T>(
   opts: TraceOptions | undefined,
   fn: () => T | Promise<T>,
 ): Promise<T> {
+  // If inherit=true and there's an active session, adopt it — don't create
+  // a new one. The inner steps will be appended to the outer session.
+  if (opts?.inherit) {
+    const existing = storage.getStore();
+    if (existing) {
+      // Just run the function in the existing context — no new session,
+      // no flush. The outer trace owns the flush.
+      return await fn();
+    }
+  }
+
   const cfg = getConfig();
   const rate = opts?.sampleRate ?? cfg.sampleRate;
   const sampled = shouldSample(rate);
 
   const session = startSession(name, opts, sampled);
+  // Validate + sanitize tags.
+  if (session.tags) session.tags = validateTags(session.tags);
   return await storage.run(session, async () => {
     let result: T;
     try {
@@ -284,14 +317,23 @@ export async function withTrace<T>(
   });
 }
 
-/** `trace` — higher-order function. Returns a wrapped fn with the same signature. */
+/** `trace` — higher-order function. Returns a wrapped fn with the same signature.
+ *
+ *  **Note:** The wrapped function always returns a Promise (because `withTrace`
+ *  is async). TypeScript is told the return type matches `T` for backward
+ *  compatibility, but callers should `await` the result.
+ *
+ *  **`this` binding:** The wrapper uses a regular `function` (not an arrow
+ *  function) and forwards `this` via `Reflect.apply` so decorated methods
+ *  retain their receiver. */
 export function trace<T extends (...args: never[]) => unknown>(
   name: string,
   opts: TraceOptions | undefined,
   fn: T,
 ): T {
-  const wrapped = (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
-    return withTrace(name, opts, () => fn(...args)) as Promise<Awaited<ReturnType<T>>>;
+  const wrapped = function(this: unknown, ...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> {
+    // Forward `this` so decorated methods work correctly.
+    return withTrace(name, opts, () => Reflect.apply(fn, this, args)) as Promise<Awaited<ReturnType<T>>>;
   };
   // Preserve name/length for nicer stack traces / introspection.
   Object.defineProperty(wrapped, "name", { value: fn.name || "trace", configurable: true });

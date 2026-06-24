@@ -30,6 +30,14 @@ export declare function parseStackTrace(stack: string | undefined | null): Stack
  * are swallowed unless `strict` mode is on.
  */
 export declare function withTrace<T>(name: string, opts: TraceOptions | undefined, fn: () => T | Promise<T>): Promise<T>;
-/** `trace` — higher-order function. Returns a wrapped fn with the same signature. */
+/** `trace` — higher-order function. Returns a wrapped fn with the same signature.
+ *
+ *  **Note:** The wrapped function always returns a Promise (because `withTrace`
+ *  is async). TypeScript is told the return type matches `T` for backward
+ *  compatibility, but callers should `await` the result.
+ *
+ *  **`this` binding:** The wrapper uses a regular `function` (not an arrow
+ *  function) and forwards `this` via `Reflect.apply` so decorated methods
+ *  retain their receiver. */
 export declare function trace<T extends (...args: never[]) => unknown>(name: string, opts: TraceOptions | undefined, fn: T): T;
 //# sourceMappingURL=context.d.ts.map

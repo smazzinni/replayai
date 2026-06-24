@@ -52,10 +52,23 @@ def _storage_dir() -> str:
     return sessions_dir
 
 
+# Valid session ID pattern — prevents path traversal (.., /, \, null bytes).
+_VALID_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _validate_session_id(session_id: str) -> None:
+    """Validate a session ID to prevent path traversal attacks."""
+    if not session_id or not _VALID_SESSION_ID.match(session_id):
+        raise ValueError(
+            f"Invalid session ID: {session_id!r}. Must match {_VALID_SESSION_ID.pattern}"
+        )
+
+
 def _slugify(name: str) -> str:
     """Make a filesystem-safe slug from a session name."""
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", name or "session").strip("-")
-    return slug or "session"
+    # Cap slug length to avoid filesystem errors (255-byte filename limit).
+    return (slug or "session")[:80]
 
 
 def save_session(session: Dict[str, Any]) -> str:
@@ -75,7 +88,11 @@ def save_session(session: Dict[str, Any]) -> str:
     if not sid:
         slug = _slugify(session.get("name", "session"))
         ts = int(time.time() * 1000)
-        sid = f"ses_{slug}_{ts}"
+        # Add a random suffix to avoid collisions when multiple sessions
+        # are created in the same millisecond.
+        import secrets
+        suffix = secrets.token_hex(4)
+        sid = f"ses_{slug}_{ts}_{suffix}"
 
     # Strip internal keys (prefixed with __).
     out = {k: v for k, v in session.items() if not k.startswith("__")}
@@ -141,7 +158,11 @@ def count_sessions() -> int:
 
 
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
-    """Return a single session dict (with steps), or None if not found."""
+    """Return a single session dict (with steps), or None if not found.
+
+    Validates the session ID to prevent path traversal.
+    """
+    _validate_session_id(session_id)
     sessions_dir = _storage_dir()
     fname = f"{session_id}.json"
     full = os.path.join(sessions_dir, fname)

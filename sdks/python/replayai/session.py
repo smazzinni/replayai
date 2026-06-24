@@ -306,15 +306,16 @@ class ReplaySession:
                 agent=f"compare:{self.session_id}",
             )
             ctx.__enter__()
+            agent_exception: Optional[BaseException] = None
             try:
                 if inputs is not None:
                     agent_callable(inputs)
                 else:
                     agent_callable()
-            except Exception:
-                # The exception is captured by the trace exit; we still
-                # want to compute divergences against whatever ran.
-                pass
+            except Exception as e:
+                # Capture the exception so we can report it as a divergence.
+                # Don't re-raise — the caller expects a CompareResult.
+                agent_exception = e
             live_session = ctx.session or {}
             raw_live_steps = list(live_session.get("steps", []))
             live_steps = self._apply_mocks(raw_live_steps)
@@ -332,6 +333,16 @@ class ReplaySession:
                     _ctxmod._current_session.set(prev_session)
 
         divergences = _diff_steps(loaded_steps, live_steps)
+
+        # If the agent threw, add a synthetic divergence so `matches` is False
+        # and the caller can see the exception.
+        if agent_exception is not None:
+            divergences.append({
+                "step": len(live_steps),
+                "field": "exception",
+                "loaded": None,
+                "live": f"{type(agent_exception).__name__}: {agent_exception}",
+            })
 
         return {
             "matches": len(divergences) == 0,

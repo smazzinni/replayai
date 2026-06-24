@@ -32,7 +32,7 @@ import type {
 } from "./types.js";
 
 /** SDK version. */
-export const VERSION = "0.7.3";
+export const VERSION = "0.7.4";
 
 export {
   trace,

@@ -49,7 +49,7 @@ function main() {
         process.exit(0);
     }
     if (cmd === "version" || cmd === "--version" || cmd === "-v") {
-        console.log("replayai-sdk/0.7.3");
+        console.log("replayai-sdk/0.7.4");
         process.exit(0);
     }
     if (cmd === "ui") {

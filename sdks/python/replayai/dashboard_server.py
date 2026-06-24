@@ -44,9 +44,14 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        # Restrict CORS to localhost for security (prevents other websites
-        # on the network from reading recorded session data).
-        self.send_header("Access-Control-Allow-Origin", "http://localhost:{}".format(self.server.server_address[1]))
+        # Reflect the request's Origin if it's localhost or 127.0.0.1
+        # (prevents CORS errors when accessing via 127.0.0.1 instead of localhost).
+        origin = self.headers.get("Origin", "")
+        port = self.server.server_address[1]
+        allowed = {f"http://localhost:{port}", f"http://127.0.0.1:{port}"}
+        if origin in allowed:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(body)
 

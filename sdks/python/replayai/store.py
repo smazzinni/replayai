@@ -24,6 +24,7 @@ import random
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 
@@ -98,7 +99,7 @@ def _build_request(
     headers = {
         "Content-Type": "application/json",
         "Accept": accept,
-        "User-Agent": "replayai-python/0.7.3",
+        "User-Agent": "replayai-python/0.7.4",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -311,8 +312,9 @@ def flush_session(session: Dict[str, Any]) -> Dict[str, Any]:
 def get_session(session_id: str) -> Dict[str, Any]:
     """GET ``/api/sessions/{id}`` — returns the full session with steps."""
     cfg = _config.get_config()
+    safe_id = urllib.parse.quote(str(session_id), safe="")
     req = _build_request(
-        _api_url(f"/api/sessions/{session_id}"),
+        _api_url(f"/api/sessions/{safe_id}"),
         method="GET",
         token=cfg.token,
     )
@@ -322,15 +324,21 @@ def get_session(session_id: str) -> Dict[str, Any]:
 def get_session_list(limit: int = 100, offset: int = 0) -> Dict[str, Any]:
     """GET ``/api/sessions`` — list sessions (summaries only by default)."""
     cfg = _config.get_config()
-    url = _api_url(f"/api/sessions?limit={limit}&offset={offset}")
+    query = urllib.parse.urlencode({"limit": limit, "offset": offset})
+    url = _api_url(f"/api/sessions?{query}")
     req = _build_request(url, method="GET", token=cfg.token)
     return _do_request(req)
 
 
 def export_session(session_id: str, lang: str = "pytest") -> str:
     """GET ``/api/sessions/{id}/export?lang=...`` — returns the test text."""
+    # Validate lang to prevent parameter injection.
+    if lang not in ("pytest", "jest"):
+        raise ValueError(f"Invalid export lang {lang!r}. Must be 'pytest' or 'jest'.")
     cfg = _config.get_config()
-    url = _api_url(f"/api/sessions/{session_id}/export?lang={lang}")
+    safe_id = urllib.parse.quote(str(session_id), safe="")
+    query = urllib.parse.urlencode({"lang": lang})
+    url = _api_url(f"/api/sessions/{safe_id}/export?{query}")
     req = _build_request(url, method="GET", token=cfg.token, accept="text/plain")
     last_exc: Optional[StoreError] = None
     for attempt in range(1, _RETRY_ATTEMPTS + 1):

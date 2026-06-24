@@ -11,6 +11,7 @@ import functools
 import inspect
 import json
 import random
+import re
 import sys
 import time
 import traceback
@@ -50,6 +51,35 @@ def _is_async_callable(fn: Callable[..., Any]) -> bool:
 
 class RecordingError(RuntimeError):
     """Raised in strict mode when recording or flushing fails."""
+
+
+# Valid tag pattern — alphanumeric, underscore, hyphen. No commas (the API
+# uses commas as a separator), no whitespace, no control chars.
+_VALID_TAG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+def _validate_tags(tags: Optional[List[str]]) -> List[str]:
+    """Validate and sanitize a list of tags.
+
+    Rejects tags containing commas (which the API uses as a separator),
+    whitespace, or control characters. Tags longer than 64 chars are truncated.
+    """
+    if not tags:
+        return []
+    out: List[str] = []
+    for t in tags:
+        if not isinstance(t, str):
+            continue
+        t = t.strip()[:64]
+        if not t:
+            continue
+        if not _VALID_TAG.match(t):
+            # Sanitize: replace invalid chars with underscore.
+            t = re.sub(r"[^A-Za-z0-9_-]", "_", t)[:64]
+            if not t or not _VALID_TAG.match(t):
+                t = "tag"
+        out.append(t)
+    return out
 
 
 @dataclass
@@ -110,15 +140,18 @@ class TraceContext:
         started_at: Optional[datetime] = None,
         agent: Optional[str] = None,
         sample_rate: Optional[float] = None,
+        inherit: bool = False,
         _force_async: bool = False,
     ) -> None:
         self.name = name
         self.project = project
-        self.tags = list(tags) if tags else []
+        # Validate + sanitize tags.
+        self.tags = _validate_tags(tags) if tags else []
         self.framework = framework
         self.started_at = started_at
         self.agent = agent or name
         self._sample_rate = sample_rate
+        self.inherit = inherit
         self._force_async = _force_async
 
         # Sample-rate check is evaluated at enter time so configure() updates
@@ -144,10 +177,9 @@ class TraceContext:
                 "For manual scopes use `with trace(...):` instead."
             )
         is_async = self._force_async or _is_async_callable(fn)
-        # Bind the wrapped fn + flags on the *template* (self) so subsequent
-        # re-enter calls share them. _reenter copies these forward.
-        self._wrapped = fn
-        self._wrapped_is_async = is_async
+        # The wrappers capture `fn` and `is_async` via closure — no need to
+        # store them on the template (which would race under concurrent
+        # decoration reusing the same TraceContext instance).
         template = self
 
         if is_async:
@@ -198,11 +230,26 @@ class TraceContext:
             started_at=None,  # re-stamped per invocation
             agent=self.agent,
             sample_rate=self._sample_rate,
+            inherit=self.inherit,
             _force_async=self._force_async,
         )
         return ctx
 
     def _enter(self) -> "TraceContext":
+        # If inherit=True and there's an active session, adopt it instead of
+        # creating a new one. This lets multiple decorated calls share one
+        # session (e.g., a demo loop that calls the agent 5 times).
+        if self.inherit:
+            existing = _current_session.get()
+            if existing is not None and existing.session is not None:
+                # Adopt the existing session — don't push a new one.
+                self._prev_session = existing
+                self._token_ctx = None  # no token to reset
+                self.session = None  # signal "adopted" — _exit won't flush
+                self._adopted = True
+                return self
+        self._adopted = False
+
         cfg = _config.get_config()
         # Resolve sample rate: explicit override > config.
         rate = self._sample_rate if self._sample_rate is not None else cfg.sample_rate
@@ -236,7 +283,12 @@ class TraceContext:
 
     def _exit(self, exc_type, exc, tb) -> None:
         if self.session is None:
-            # Never entered — nothing to do.
+            # Never entered (or adopted an existing session) — nothing to do.
+            return
+        # If we adopted an existing session, don't flush — the outer trace
+        # owns the flush.
+        if getattr(self, "_adopted", False):
+            self.session = None
             return
         # Restore previous session on the stack.
         if self._token_ctx is not None:
@@ -364,6 +416,10 @@ class TraceContext:
                 if cfg.strict or _config.strict_mode:
                     raise RecordingError(f"ReplayAI local persist failed: {e}") from e
                 print(f"[replayai] warning: local persist failed: {e}", file=sys.stderr)
+
+        # Mark as exited so a second __exit__ call (e.g., from generator
+        # cleanup or contextlib.ExitStack) doesn't re-flush a duplicate.
+        self.session = None
 
     # ----- public step recording -----
     def record_step(self, **step: Any) -> None:
@@ -495,11 +551,20 @@ def trace(
     started_at: Optional[datetime] = None,
     agent: Optional[str] = None,
     sample_rate: Optional[float] = None,
+    inherit: bool = False,
 ) -> TraceContext:
     """Open a new trace.
 
     Usable as a decorator (``@trace("agent", ...)``) or a context manager
     (``with trace("agent") as ctx:``). Returns a :class:`TraceContext`.
+
+    When ``inherit=True`` and there's an active trace, the decorated function
+    appends its steps to the existing session instead of creating a new one.
+    Use this to group multiple calls into one logical session::
+
+        with trace("demo-run"):
+            for customer in customers:
+                handle(customer)  # @trace("agent", inherit=True) — steps go into "demo-run"
     """
     return TraceContext(
         name,
@@ -509,6 +574,7 @@ def trace(
         started_at=started_at,
         agent=agent,
         sample_rate=sample_rate,
+        inherit=inherit,
     )
 
 
@@ -521,6 +587,7 @@ def atrace(
     started_at: Optional[datetime] = None,
     agent: Optional[str] = None,
     sample_rate: Optional[float] = None,
+    inherit: bool = False,
 ) -> TraceContext:
     """Async variant of :func:`trace`.
 
@@ -537,6 +604,7 @@ def atrace(
         started_at=started_at,
         agent=agent,
         sample_rate=sample_rate,
+        inherit=inherit,
         _force_async=True,
     )
 

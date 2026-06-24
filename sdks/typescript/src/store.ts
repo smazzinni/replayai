@@ -9,7 +9,7 @@ import type { SessionStatus, SessionStep } from "./types.js";
 
 /** SDK version (mirrored from index.ts — kept here to avoid a circular import
  *  just for the user-agent string). */
-const SDK_VERSION = "0.7.3";
+const SDK_VERSION = "0.7.4";
 
 export interface FlushPayload {
   /** Local correlation id (UUIDv4); the API assigns the canonical id. */
@@ -41,7 +41,13 @@ export interface FlushResult {
 // ---- In-memory retry queue -------------------------------------------------
 
 const QUEUE_MAX = 100;
-const queue: FlushPayload[] = [];
+const MAX_PAYLOAD_FAILURES = 3; // drop after this many failed attempts
+
+interface QueuedPayload {
+  payload: FlushPayload;
+  failures: number;
+}
+const queue: QueuedPayload[] = [];
 
 function enqueuePayload(payload: FlushPayload): boolean {
   if (queue.length >= QUEUE_MAX) {
@@ -50,22 +56,34 @@ function enqueuePayload(payload: FlushPayload): boolean {
     );
     return false;
   }
-  queue.push(payload);
+  queue.push({ payload, failures: 0 });
   return true;
 }
 
 /** Drain the in-memory retry queue. Called before every fresh flush so older
- *  failed payloads get re-sent first. Returns the count successfully drained. */
+ *  failed payloads get re-sent first. Returns the count successfully drained.
+ *
+ *  A payload that fails MAX_PAYLOAD_FAILURES times is dropped (dead-letter)
+ *  so it doesn't block the rest of the queue. */
 async function drainQueue(): Promise<number> {
   let drained = 0;
   while (queue.length > 0) {
-    const next = queue[0]!;
-    const result = await flushOnce(next);
+    const entry = queue[0]!;
+    const result = await flushOnce(entry.payload);
     if (result.ok) {
       queue.shift();
       drained++;
     } else {
-      // Stop at the first failure — keep the rest queued, in order.
+      entry.failures++;
+      if (entry.failures >= MAX_PAYLOAD_FAILURES) {
+        // Dead-letter: drop this payload so it doesn't block the queue.
+        console.warn(
+          `[replayai] payload for session ${entry.payload.sessionId} dropped after ${MAX_PAYLOAD_FAILURES} failed attempts`,
+        );
+        queue.shift();
+        continue; // try the next one
+      }
+      // Stop draining — the server might be down. Try again on the next flush.
       break;
     }
   }
@@ -140,11 +158,11 @@ function maybeTruncate(payload: FlushPayload, maxSteps: number): boolean {
 }
 
 function truncateSteps(steps: SessionStep[], head: number, tail: number): SessionStep[] {
-  const errors = steps.filter((s) => s.status === "failed");
   if (steps.length <= head + tail) return steps;
   const first = steps.slice(0, head);
   const last = steps.slice(steps.length - tail);
   // De-dupe: errors captured by `first`/`last` shouldn't be repeated.
+  const errors = steps.filter((s) => s.status === "failed");
   const seen = new Set<string>();
   for (const s of [...first, ...last]) {
     if (s.id) seen.add(s.id);
@@ -154,7 +172,11 @@ function truncateSteps(steps: SessionStep[], head: number, tail: number): Sessio
     const k = s.id ? s.id : `${s.name}|${s.t ?? s.offsetMs ?? 0}`;
     return !seen.has(k);
   });
-  const out: SessionStep[] = [...first, ...extra, ...last];
+  let out: SessionStep[] = [...first, ...extra, ...last];
+  // Cap to head + tail to avoid exceeding maxSteps when there are many errors.
+  if (out.length > head + tail) {
+    out = [...first, ...last];
+  }
   return out;
 }
 

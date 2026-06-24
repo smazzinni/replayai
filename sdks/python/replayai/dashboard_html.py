@@ -644,7 +644,7 @@ function renderSessions() {
     return;
   }
   list.innerHTML = filtered.map(s => `
-    <div class="session-item ${s.id === selectedId ? 'active' : ''}" onclick="selectSession('${esc(s.id)}')">
+    <div class="session-item ${s.id === selectedId ? 'active' : ''}" data-sid="${esc(s.id)}">
       <div class="session-dot ${s.status}"></div>
       <div class="session-info">
         <div class="session-name">${esc(s.name)}</div>
@@ -777,10 +777,62 @@ function stepTo(i) {
 // Init
 document.getElementById('searchInput').addEventListener('input', renderSessions);
 document.getElementById('refreshBtn').addEventListener('click', () => { loadStats(); loadSessions(); });
+
+// Event delegation for session items (avoids inline onclick — XSS-safe).
+document.getElementById('sessionsList').addEventListener('click', (e) => {
+  const item = e.target.closest('.session-item');
+  if (item) {
+    const sid = item.getAttribute('data-sid');
+    if (sid) selectSession(sid);
+  }
+});
+
+// Keyboard navigation: arrow keys to switch sessions, space to auto-replay.
+let autoReplayTimer = null;
+document.addEventListener('keydown', (e) => {
+  // Ignore when typing in inputs.
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowDown' || e.key === 'j') {
+    e.preventDefault();
+    if (!allSessions.length) return;
+    const idx = allSessions.findIndex(s => s.id === selectedId);
+    const next = allSessions[Math.min(idx + 1, allSessions.length - 1)];
+    if (next) selectSession(next.id);
+  } else if (e.key === 'ArrowUp' || e.key === 'k') {
+    e.preventDefault();
+    if (!allSessions.length) return;
+    const idx = allSessions.findIndex(s => s.id === selectedId);
+    const prev = allSessions[Math.max(idx - 1, 0)];
+    if (prev) selectSession(prev.id);
+  } else if (e.key === ' ' && currentSession) {
+    e.preventDefault();
+    toggleAutoReplay();
+  }
+});
+
+function toggleAutoReplay() {
+  if (autoReplayTimer) {
+    clearInterval(autoReplayTimer);
+    autoReplayTimer = null;
+    return;
+  }
+  const steps = currentSession?.steps || [];
+  if (!steps.length) return;
+  autoReplayTimer = setInterval(() => {
+    if (stepIndex < steps.length - 1) {
+      stepTo(stepIndex + 1);
+    } else {
+      clearInterval(autoReplayTimer);
+      autoReplayTimer = null;
+    }
+  }, 1200);
+}
+
 loadStats();
 loadSessions();
 
-// Auto-refresh every 5s
+// Auto-refresh every 5s (only stats + sessions list — doesn't reset the detail).
 setInterval(() => { loadStats(); loadSessions(); }, 5000);
 </script>
 </body>

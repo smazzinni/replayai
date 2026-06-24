@@ -23,7 +23,7 @@ const node_path_1 = require("node:path");
 const node_fs_1 = require("node:fs");
 const config_js_1 = require("./config.js");
 const local_store_js_1 = require("./local-store.js");
-const SDK_VERSION = "0.7.3";
+const SDK_VERSION = "0.7.4";
 // The dashboard HTML — a self-contained single-page app matching the
 // ReplayAI website's Live Demo design. Identical to the Python SDK's
 // dashboard_html.py.
@@ -624,7 +624,7 @@ function renderSessions() {
     list.innerHTML = '<div class="empty-state"><div><div class="empty-icon">∅</div><div>' + (q ? 'No sessions match your filter.' : 'No sessions yet.<br/>Record one to see it here.') + '</div></div></div>';
     return;
   }
-  list.innerHTML = filtered.map(s => '<div class="session-item ' + (s.id === selectedId ? 'active' : '') + '" onclick="selectSession(\\'' + esc(s.id) + '\\')"><div class="session-dot ' + s.status + '"></div><div class="session-info"><div class="session-name">' + esc(s.name) + '</div><div class="session-meta"><span>' + fmtDur(s.durationMs) + '</span><span class="sep">·</span><span>' + fmtCost(s.costUsd) + '</span><span class="sep">·</span><span>' + (s.stepCount||0) + ' steps</span><span class="sep">·</span><span>' + fmtRel(s.startedAt) + '</span></div><div class="session-id">' + esc(s.id||'') + '</div></div></div>').join('');
+  list.innerHTML = filtered.map(s => '<div class="session-item ' + (s.id === selectedId ? 'active' : '') + '" data-sid="' + esc(s.id) + '"><div class="session-dot ' + s.status + '"></div><div class="session-info"><div class="session-name">' + esc(s.name) + '</div><div class="session-meta"><span>' + fmtDur(s.durationMs) + '</span><span class="sep">·</span><span>' + fmtCost(s.costUsd) + '</span><span class="sep">·</span><span>' + (s.stepCount||0) + ' steps</span><span class="sep">·</span><span>' + fmtRel(s.startedAt) + '</span></div><div class="session-id">' + esc(s.id||'') + '</div></div></div>').join('');
 }
 
 async function selectSession(id) {
@@ -676,23 +676,78 @@ function stepTo(i) {
 
 document.getElementById('searchInput').addEventListener('input', renderSessions);
 document.getElementById('refreshBtn').addEventListener('click', () => { loadStats(); loadSessions(); });
+
+// Event delegation for session items (avoids inline onclick — XSS-safe).
+document.getElementById('sessionsList').addEventListener('click', (e) => {
+  const item = e.target.closest('.session-item');
+  if (item) {
+    const sid = item.getAttribute('data-sid');
+    if (sid) selectSession(sid);
+  }
+});
+
+// Keyboard navigation: arrow keys to switch sessions, space to auto-replay.
+let autoReplayTimer = null;
+document.addEventListener('keydown', (e) => {
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowDown' || e.key === 'j') {
+    e.preventDefault();
+    if (!allSessions.length) return;
+    const idx = allSessions.findIndex(s => s.id === selectedId);
+    const next = allSessions[Math.min(idx + 1, allSessions.length - 1)];
+    if (next) selectSession(next.id);
+  } else if (e.key === 'ArrowUp' || e.key === 'k') {
+    e.preventDefault();
+    if (!allSessions.length) return;
+    const idx = allSessions.findIndex(s => s.id === selectedId);
+    const prev = allSessions[Math.max(idx - 1, 0)];
+    if (prev) selectSession(prev.id);
+  } else if (e.key === ' ' && currentSession) {
+    e.preventDefault();
+    toggleAutoReplay();
+  }
+});
+
+function toggleAutoReplay() {
+  if (autoReplayTimer) {
+    clearInterval(autoReplayTimer);
+    autoReplayTimer = null;
+    return;
+  }
+  const steps = currentSession?.steps || [];
+  if (!steps.length) return;
+  autoReplayTimer = setInterval(() => {
+    if (stepIndex < steps.length - 1) {
+      stepTo(stepIndex + 1);
+    } else {
+      clearInterval(autoReplayTimer);
+      autoReplayTimer = null;
+    }
+  }, 1200);
+}
+
 loadStats();
 loadSessions();
 setInterval(() => { loadStats(); loadSessions(); }, 5000);
 </script>
 </body>
 </html>`;
-function sendJSON(res, data, status = 200, port) {
+function sendJSON(res, data, status = 200, port, origin) {
     const body = JSON.stringify(data);
     const headers = {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Length": Buffer.byteLength(body),
         "Cache-Control": "no-store",
     };
-    // Restrict CORS to localhost for security (prevents other websites
-    // on the network from reading recorded session data).
-    if (port) {
-        headers["Access-Control-Allow-Origin"] = `http://localhost:${port}`;
+    // Reflect the request's Origin if it's localhost or 127.0.0.1 (prevents
+    // CORS errors when accessing via 127.0.0.1 instead of localhost).
+    if (port && origin) {
+        const allowed = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
+        if (allowed.has(origin)) {
+            headers["Access-Control-Allow-Origin"] = origin;
+            headers["Vary"] = "Origin";
+        }
     }
     res.writeHead(status, headers);
     res.end(body);
@@ -735,17 +790,18 @@ function startServer(opts) {
     const server = (0, node_http_1.createServer)((req, res) => {
         const url = new URL(req.url || "/", `http://localhost:${port}`);
         const path = url.pathname.replace(/\/$/, "") || "/";
+        const origin = req.headers.origin;
         if (path === "/") {
             const html = DASHBOARD_HTML.replace("__PORT__", String(port));
             sendHTML(res, html);
             return;
         }
         if (path === "/health") {
-            sendJSON(res, { ok: true, service: "replayai-dashboard", version: SDK_VERSION }, 200, port);
+            sendJSON(res, { ok: true, service: "replayai-dashboard", version: SDK_VERSION }, 200, port, origin);
             return;
         }
         if (path === "/api/stats") {
-            sendJSON(res, (0, local_store_js_1.getStats)(), 200, port);
+            sendJSON(res, (0, local_store_js_1.getStats)(), 200, port, origin);
             return;
         }
         if (path === "/api/sessions") {
@@ -758,20 +814,20 @@ function startServer(opts) {
                 return { ...rest, stepCount: steps?.length ?? 0 };
             });
             const total = (0, local_store_js_1.countSessions)();
-            sendJSON(res, { sessions, total, hasMore: offset + limit < total }, 200, port);
+            sendJSON(res, { sessions, total, hasMore: offset + limit < total }, 200, port, origin);
             return;
         }
         if (path.startsWith("/api/sessions/")) {
             const sid = decodeURIComponent(path.slice("/api/sessions/".length));
             const session = (0, local_store_js_1.getSession)(sid);
             if (!session) {
-                sendJSON(res, { error: "not found" }, 404, port);
+                sendJSON(res, { error: "not found" }, 404, port, origin);
                 return;
             }
-            sendJSON(res, session, 200, port);
+            sendJSON(res, session, 200, port, origin);
             return;
         }
-        sendJSON(res, { error: "not found" }, 404, port);
+        sendJSON(res, { error: "not found" }, 404, port, origin);
     });
     server.listen(port, "127.0.0.1", () => {
         const url = `http://localhost:${port}`;
