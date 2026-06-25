@@ -14,7 +14,7 @@ import {
   SquareTerminal,
   Wifi,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DiffView } from "./diff-view";
 import { ExportView } from "./export-view";
@@ -49,7 +49,6 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function Dashboard() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [tab, setTab] = useState<TabId>("replay");
@@ -86,13 +85,19 @@ export function Dashboard() {
   }
 
   // Keep the URL in sync with the selected session (shareable).
+  // Uses window.history.replaceState instead of router.replace to avoid
+  // triggering an RSC navigation (which can fail in sandboxed environments
+  // and cause a full page reload, losing React Query cache state).
   useEffect(() => {
     if (!selectedId) return;
     if (searchParams.get("s") === selectedId) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("s", selectedId);
-    router.replace(`/?${params.toString()}#demo`, { scroll: false });
-  }, [selectedId, router, searchParams]);
+    const newUrl = `/?${params.toString()}#demo`;
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", newUrl);
+    }
+  }, [selectedId, searchParams]);
 
   const handleRecorded = useCallback((id: string) => {
     setSelectedId(id);
